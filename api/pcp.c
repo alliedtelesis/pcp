@@ -29,7 +29,6 @@
 #define UPNP_IGD_PCP_IWF_SUPPORT_KEY "upnp_igd_pcp_iwf_support"
 #define MIN_MAPPING_LIFETIME_KEY "min_mapping_lifetime"
 #define MAX_MAPPING_LIFETIME_KEY "max_mapping_lifetime"
-#define DEFAULT_MAPPING_LIFETIME_KEY "default_mapping_lifetime"
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
 
 
@@ -86,10 +85,6 @@ pcp_load_config (void)
         if (saved_cbs->max_mapping_lifetime)
         {
             saved_cbs->max_mapping_lifetime (max_mapping_lifetime_get ());
-        }
-        if (saved_cbs->default_mapping_lifetime)
-        {
-            saved_cbs->default_mapping_lifetime (default_mapping_lifetime_get ());
         }
         if (saved_cbs->prefer_failure_req_rate_limit)
         {
@@ -217,18 +212,6 @@ max_mapping_lifetime_get (void)
 }
 
 bool
-default_mapping_lifetime_set (u_int32_t lifetime)
-{
-    return apteryx_set_int (CONFIG_PATH, DEFAULT_MAPPING_LIFETIME_KEY, lifetime);
-}
-
-u_int32_t
-default_mapping_lifetime_get (void)
-{
-    return (u_int32_t) apteryx_get_int (CONFIG_PATH, DEFAULT_MAPPING_LIFETIME_KEY);
-}
-
-bool
 prefer_failure_req_rate_limit_set (u_int32_t rate)
 {
     return apteryx_set_int (CONFIG_PATH, PREFER_FAILURE_REQ_RATE_LIMIT_KEY, rate);
@@ -254,7 +237,6 @@ config_set_default (void)
         upnp_igd_pcp_iwf_support_set (DEFAULT_UPNP_IGD_PCP_IWF_SUPPORT) &&
         min_mapping_lifetime_set (DEFAULT_MIN_MAPPING_LIFETIME) &&
         max_mapping_lifetime_set (DEFAULT_MAX_MAPPING_LIFETIME) &&
-        default_mapping_lifetime_set (DEFAULT_DEFAULT_MAPPING_LIFETIME) &&
         prefer_failure_req_rate_limit_set (DEFAULT_PREFER_FAILURE_REQ_RATE_LIMIT))
     {
         return true;
@@ -342,13 +324,6 @@ pcp_config_change (const char *path, void *priv, const unsigned char *value,
             saved_cbs->max_mapping_lifetime (max_mapping_lifetime_get ());
         }
     }
-    else if (strcmp (key, DEFAULT_MAPPING_LIFETIME_KEY) == 0)
-    {
-        if (saved_cbs->default_mapping_lifetime)
-        {
-            saved_cbs->default_mapping_lifetime (default_mapping_lifetime_get ());
-        }
-    }
     else if (strcmp (key, PREFER_FAILURE_REQ_RATE_LIMIT_KEY) == 0)
     {
         if (saved_cbs->prefer_failure_req_rate_limit)
@@ -397,8 +372,7 @@ print_pcp_apteryx_config (void)
         printf ("    %s     %d\n", UPNP_IGD_PCP_IWF_SUPPORT_KEY, upnp_igd_pcp_iwf_support_get());
         printf ("    %s     %u\n", MIN_MAPPING_LIFETIME_KEY, min_mapping_lifetime_get());
         printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, max_mapping_lifetime_get());
-        printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, default_mapping_lifetime_get());
-        printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, prefer_failure_req_rate_limit_get());
+        printf ("    %s     %u\n", PREFER_FAILURE_REQ_RATE_LIMIT_KEY, prefer_failure_req_rate_limit_get());
     }
     g_list_free_full (paths, free);
 }

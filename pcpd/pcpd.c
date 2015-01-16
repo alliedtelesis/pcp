@@ -49,7 +49,6 @@ typedef struct _pcp_config
     bool upnp_igd_pcp_iwf_support;
     u_int32_t min_mapping_lifetime;
     u_int32_t max_mapping_lifetime;
-    u_int32_t default_mapping_lifetime;
     u_int32_t prefer_failure_req_rate_limit;
 } pcp_config;
 
@@ -95,13 +94,7 @@ check_error (int n, const char *msg)
 int
 write_pcp_state_to_file (pcp_config *config, FILE *target)
 {
-    char def_map_lifetime_output[SMALL_BUF_SIZE] = { '\0' };
     int n;
-
-    if (config->default_mapping_lifetime > 0)
-        sprintf (def_map_lifetime_output, "%u", config->default_mapping_lifetime);
-    else
-        strncpy (def_map_lifetime_output, "None", 5);
 
     n = fprintf (target,
                  "PCP Config:\n"
@@ -113,7 +106,6 @@ write_pcp_state_to_file (pcp_config *config, FILE *target)
                  "     %-36.35s: %s\n"
                  "     %-36.35s: %u\n"
                  "     %-36.35s: %u\n"
-                 "     %-36.35s: %s\n"
                  "     %-36.35s: %u\n",
                  "PCP service",
                  config->pcp_enabled ? "Enabled" : "Disabled",
@@ -131,8 +123,6 @@ write_pcp_state_to_file (pcp_config *config, FILE *target)
                  config->min_mapping_lifetime,
                  "Maximum mapping lifetime",
                  config->max_mapping_lifetime,
-                 "Default mapping lifetime",
-                 def_map_lifetime_output,
                  "PREFER_FAILURE request rate limit",
                  config->prefer_failure_req_rate_limit);
 
@@ -449,14 +439,6 @@ max_mapping_lifetime (u_int32_t lifetime)
 }
 
 void
-default_mapping_lifetime (u_int32_t lifetime)
-{
-    if (config.default_mapping_lifetime == lifetime)
-        return;
-    config.default_mapping_lifetime = lifetime;
-}
-
-void
 prefer_failure_req_rate_limit (u_int32_t rate)
 {
     if (config.prefer_failure_req_rate_limit == rate)
@@ -475,7 +457,6 @@ pcp_callbacks callbacks = {
     .upnp_igd_pcp_iwf_support = upnp_igd_pcp_iwf_support,
     .min_mapping_lifetime = min_mapping_lifetime,
     .max_mapping_lifetime = max_mapping_lifetime,
-    .default_mapping_lifetime = default_mapping_lifetime,
     .prefer_failure_req_rate_limit = prefer_failure_req_rate_limit,
 };
 
