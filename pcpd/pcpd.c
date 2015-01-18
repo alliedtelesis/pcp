@@ -446,6 +446,39 @@ prefer_failure_req_rate_limit (u_int32_t rate)
     config.prefer_failure_req_rate_limit = rate;
 }
 
+void
+run_loop (int sock, socklen_t fromlen)
+{
+    int n;
+    struct sockaddr_in from;
+    unsigned char pkt_buf[MAX_STRING_LEN];
+    bool pkt_buf_changed;
+    unsigned char *ptr = NULL;
+    packet_type type;
+
+    n = recvfrom (sock, pkt_buf, MAX_STRING_LEN - 1, 0, (struct sockaddr *) &from,
+                  &fromlen);
+    check_error (n, "recvfrom");
+
+    type = get_packet_type (pkt_buf);
+
+    pkt_buf_changed = false;
+
+    if (type == MAP_REQUEST && config.map_support == true)
+    {
+        ptr = process_map_request (pkt_buf);
+
+        pkt_buf_changed = true;
+    }
+
+    // Send the response
+    if (pkt_buf_changed)
+    {
+        n = sendto (sock, pkt_buf, ptr - pkt_buf, 0, (struct sockaddr *) &from,
+                    fromlen);
+        check_error (n, "sendto");
+    }
+}
 
 /** A struct that contains function pointers for handling each of the possible callbacks */
 pcp_callbacks callbacks = {
@@ -466,14 +499,8 @@ pcp_callbacks callbacks = {
 int
 main (int argc, char *argv[])
 {
-    int sock, n;
+    int sock;
     socklen_t fromlen;
-    struct sockaddr_in from;
-
-    unsigned char pkt_buf[MAX_STRING_LEN];
-    bool pkt_buf_changed;
-    unsigned char *ptr = NULL;
-    packet_type type;
 
     process_arguments (argc, argv);
 
@@ -497,30 +524,7 @@ main (int argc, char *argv[])
 
     while (1)
     {
-        // TODO: Pull out main loop into separate function.
-
-        n = recvfrom (sock, pkt_buf, MAX_STRING_LEN - 1, 0, (struct sockaddr *) &from,
-                      &fromlen);
-        check_error (n, "recvfrom");
-
-        type = get_packet_type (pkt_buf);
-
-        pkt_buf_changed = false;
-
-        if (type == MAP_REQUEST && config.map_support == true)
-        {
-            ptr = process_map_request (pkt_buf);
-
-            pkt_buf_changed = true;
-        }
-
-        // Send the response
-        if (pkt_buf_changed)
-        {
-            n = sendto (sock, pkt_buf, ptr - pkt_buf, 0, (struct sockaddr *) &from,
-                        fromlen);
-            check_error (n, "sendto");
-        }
+        run_loop (sock, fromlen);
 
     }
     return EXIT_SUCCESS;
