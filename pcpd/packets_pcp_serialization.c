@@ -7,8 +7,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <limits.h>
 #include <arpa/inet.h>
+
 #include "packets_pcp.h"
 
 /* The following "unsigned char *serialize_xx (unsigned char *buffer, u_intx_t value)"

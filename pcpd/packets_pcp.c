@@ -7,10 +7,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <limits.h>
-#include <arpa/inet.h>
-#include "packets_pcp.h"
 #include <time.h>
+#include <arpa/inet.h>
+
+#include "packets_pcp.h"
 
 /**
  * @brief new_pcp_request_header - Create a new pcp request header, used by clients.

@@ -2,27 +2,27 @@
  * The main Port Control Protocol Daemon
  */
 
-#include <sys/types.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <signal.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <getopt.h>
 #include <glib.h>
+#include <netdb.h>
 #include <signal.h>
-#include <sys/stat.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
+#include <unistd.h>
 
-#include "packets_pcp.h"
-#include "packets_pcp_serialization.h"
+#include <netinet/in.h>
+
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "libpcp.h"
+#include "packets_pcp.h"
+#include "packets_pcp_serialization.h"
 
 
 #define PCPD_PID_PATH "/var/run/pcpd.pid"
