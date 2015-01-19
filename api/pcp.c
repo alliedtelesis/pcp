@@ -13,13 +13,36 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <apteryx.h>
+
 #include "libpcp.h"
+
+
+#ifndef MAXIMUM_MAPPING_ID
+#define MAXIMUM_MAPPING_ID 65535
+#endif
 
 #define ROOT_PATH "/pcp"
 
-#define CONFIG_PATH ROOT_PATH "/config"
+/* mapping keys */
+#define MAPPING_PATH ROOT_PATH "/mappings"
+#define INDEX_KEY "index"
+#define MAPPING_NONCE_1_KEY "mapping_nonce_1"
+#define MAPPING_NONCE_2_KEY "mapping_nonce_2"
+#define MAPPING_NONCE_3_KEY "mapping_nonce_3"
+#define INTERNAL_IP_KEY "internal_ip"
+#define INTERNAL_PORT_KEY "internal_port"
+#define EXTERNAL_IP_KEY "external_ip"
+#define EXTERNAL_PORT_KEY "external_port"
+#define LIFETIME_KEY "lifetime"
+#define START_OF_LIFE_KEY "start_of_life"
+#define OPCODE_KEY "opcode"
+#define PROTOCOL_KEY "protocol"
 
+/* config keys */
+#define CONFIG_PATH ROOT_PATH "/config"
 #define PCP_INITIALIZED_KEY "pcp_initialized"
 #define PCP_ENABLED_KEY "pcp_enabled"
 #define MAP_SUPPORT_KEY "map_support"
@@ -31,6 +54,21 @@
 #define MAX_MAPPING_LIFETIME_KEY "max_mapping_lifetime"
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
 
+/** Mapping handle */
+struct pcp_mapping_s
+{
+    char *path;
+    int index;
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE];
+//    struct in6_addr internal_ip;
+    u_int16_t internal_port;
+//    struct in6_addr external_ip;
+    u_int16_t external_port;
+    u_int32_t lifetime;         // assigned_lifetime
+    u_int32_t start_of_life;    // call time (NULL) at start
+    u_int8_t opcode;            // MAP or PEER opcode
+    u_int8_t protocol;
+};
 
 static pcp_callbacks *saved_cbs = NULL;
 static pthread_mutex_t callback_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -45,6 +83,157 @@ void
 pcp_deinit (void)
 {
     apteryx_shutdown ();
+}
+
+static int
+current_highest_index (const char *path)
+{
+    GList *query_head = apteryx_search (path);
+    GList *query;
+    int max = 0;
+    int index_id;
+
+    for (query = query_head; query; query = g_list_next (query))
+    {
+        if (query->data)
+        {
+            index_id = apteryx_get_int (query->data, INDEX_KEY);
+            if (index_id > max)
+            {
+                max = index_id;
+            }
+        }
+    }
+    g_list_free_full (query_head, free);
+
+    return max;
+}
+
+static int
+next_highest_id (const char *path)
+{
+    int index = -1;
+    int max_index = current_highest_index (path);
+    max_index += 11;
+    index = (max_index) - (max_index % 10);
+    if (index > MAXIMUM_MAPPING_ID)
+    {
+        return -1;
+    }
+    return index;
+}
+
+bool // TODO: Decide if bool or enum of error types
+pcp_mapping_add (int index,
+                 u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
+                 //struct in6_addr internal_ip, //TODO: remove comment
+                 u_int16_t internal_port,
+                 //struct in6_addr external_ip, //TODO: remove comment
+                 u_int16_t external_port,
+                 u_int32_t lifetime,
+                 u_int8_t opcode,
+                 u_int8_t protocol)
+{
+    char *path = NULL;
+
+    /* TODO: Verify valid, maybe check if mapping already exists */
+
+    if (index == -1)
+    {
+        index = next_highest_id (MAPPING_PATH "/");
+        if (index < 0)
+        {
+            return false;   // Invalid index
+        }
+    }
+
+
+    /* Make sure the specified mapping index is not in use */
+    /* TODO: Try find the index, if found then return error */
+
+
+    if (asprintf (&path, MAPPING_PATH "/%d", index) == 0)
+    {
+        return false;       // Out of memory
+    }
+
+    apteryx_set_int (path, INDEX_KEY, index);
+    apteryx_set_int (path, MAPPING_NONCE_1_KEY, mapping_nonce[0]);
+    apteryx_set_int (path, MAPPING_NONCE_2_KEY, mapping_nonce[1]);
+    apteryx_set_int (path, MAPPING_NONCE_3_KEY, mapping_nonce[2]);
+    // TODO: int ip
+    apteryx_set_int (path, INTERNAL_PORT_KEY, internal_port);
+    // TODO: ext ip
+    apteryx_set_int (path, EXTERNAL_PORT_KEY, external_port);
+    apteryx_set_int (path, LIFETIME_KEY, lifetime);
+    apteryx_set_int (path, START_OF_LIFE_KEY, time (NULL));
+    apteryx_set_int (path, OPCODE_KEY, opcode);
+    apteryx_set_int (path, PROTOCOL_KEY, protocol);
+    apteryx_set_string (path, NULL, "-");
+
+    free (path);
+
+    return true;            // Success
+}
+
+pcp_mapping
+pcp_mapping_find (int mapping_id)
+{
+    char *tmp;
+    pcp_mapping mapping;
+    mapping = calloc (1, sizeof (*mapping));
+
+    if (asprintf (&mapping->path, MAPPING_PATH "/%d", mapping_id) == 0 ||
+        (tmp = apteryx_get_string (mapping->path, NULL)) == NULL)
+    {
+        goto error;
+    }
+    free (tmp);
+
+    mapping->index = mapping_id;
+    mapping->mapping_nonce[0] = apteryx_get_int (mapping->path, MAPPING_NONCE_1_KEY);
+    mapping->mapping_nonce[1] = apteryx_get_int (mapping->path, MAPPING_NONCE_2_KEY);
+    mapping->mapping_nonce[2] = apteryx_get_int (mapping->path, MAPPING_NONCE_3_KEY);
+    // TODO: Int .IP
+    mapping->internal_port = apteryx_get_int (mapping->path, INTERNAL_PORT_KEY);
+    // TODO: Ext .IP
+    mapping->external_port = apteryx_get_int (mapping->path, EXTERNAL_PORT_KEY);
+    mapping->lifetime = apteryx_get_int (mapping->path, LIFETIME_KEY);
+    mapping->start_of_life = apteryx_get_int (mapping->path, START_OF_LIFE_KEY);
+    mapping->opcode = apteryx_get_int (mapping->path, OPCODE_KEY);
+    mapping->protocol = apteryx_get_int (mapping->path, PROTOCOL_KEY);
+
+//    /* get application */ < Copied from firewall for reference
+//    if ((tmp = apteryx_get_string (rule->path, APPLICATION_KEY)) != NULL)
+//    {
+//        strncpy (rule->application, tmp, sizeof (rule->application));
+//        free (tmp);
+//    }
+//    else
+//    {
+//        goto error;
+//    }
+
+
+    return mapping;
+
+  error:
+    pcp_mapping_destroy (mapping);
+    perror("error");
+    return NULL;
+}
+
+void
+pcp_mapping_destroy (pcp_mapping mapping)
+{
+    if (mapping != NULL)
+    {
+        if (mapping->path != NULL)
+        {
+            free (mapping->path);
+        }
+        free (mapping);
+    }
 }
 
 bool
@@ -364,15 +553,56 @@ print_pcp_apteryx_config (void)
 
         path = (char *)_iter->data;
         printf ("  %s\n", strrchr (path, '/') + 1);
-        printf ("    %s     %d\n", PCP_ENABLED_KEY, pcp_enabled_get());
-        printf ("    %s     %d\n", MAP_SUPPORT_KEY, map_support_get());
-        printf ("    %s     %d\n", PEER_SUPPORT_KEY, peer_support_get());
-        printf ("    %s     %d\n", THIRD_PARTY_SUPPORT_KEY, third_party_support_get());
-        printf ("    %s     %d\n", PROXY_SUPPORT_KEY, proxy_support_get());
-        printf ("    %s     %d\n", UPNP_IGD_PCP_IWF_SUPPORT_KEY, upnp_igd_pcp_iwf_support_get());
-        printf ("    %s     %u\n", MIN_MAPPING_LIFETIME_KEY, min_mapping_lifetime_get());
-        printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, max_mapping_lifetime_get());
-        printf ("    %s     %u\n", PREFER_FAILURE_REQ_RATE_LIMIT_KEY, prefer_failure_req_rate_limit_get());
+
+        if (strcmp (strrchr (path, '/') + 1, "config") == 0)
+        {
+            printf ("    %s     %d\n", PCP_ENABLED_KEY, pcp_enabled_get());
+            printf ("    %s     %d\n", MAP_SUPPORT_KEY, map_support_get());
+            printf ("    %s     %d\n", PEER_SUPPORT_KEY, peer_support_get());
+            printf ("    %s     %d\n", THIRD_PARTY_SUPPORT_KEY, third_party_support_get());
+            printf ("    %s     %d\n", PROXY_SUPPORT_KEY, proxy_support_get());
+            printf ("    %s     %d\n", UPNP_IGD_PCP_IWF_SUPPORT_KEY, upnp_igd_pcp_iwf_support_get());
+            printf ("    %s     %u\n", MIN_MAPPING_LIFETIME_KEY, min_mapping_lifetime_get());
+            printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, max_mapping_lifetime_get());
+            printf ("    %s     %u\n", PREFER_FAILURE_REQ_RATE_LIMIT_KEY, prefer_failure_req_rate_limit_get());
+        }
     }
     g_list_free_full (paths, free);
+}
+
+void
+print_pcp_mapping (pcp_mapping mapping)
+{
+    if (mapping)
+    {
+        printf ("PCP Mapping:\n"
+                "     %-36.35s: %s\n"
+                "     %-36.35s: %d\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %u\n"
+                "     %-36.35s: %s\n"
+                "     %-36.35s: %u\n",
+                "Path", mapping->path,
+                "Index", mapping->index,
+                "Mapping nonce 1", mapping->mapping_nonce[0],
+                "Mapping nonce 2", mapping->mapping_nonce[1],
+                "Mapping nonce 3", mapping->mapping_nonce[2],
+                // TOOD: Int. IP
+                "Internal port", mapping->internal_port,
+                // TOOD: Ext. IP
+                "External port", mapping->external_port,
+                "Lifetime", mapping->lifetime,
+                "Start of life", mapping->start_of_life,
+                "Opcode", (mapping->opcode == MAP_OPCODE) ? "MAP" : "PEER",
+                "Protocol", mapping->protocol);
+    }
+    else
+    {
+        puts ("null");
+    }
 }

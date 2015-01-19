@@ -362,6 +362,32 @@ process_map_request (unsigned char *pkt_buf)
     assigned_ext_ip = "80fe::2020:ff3b:2eef:3829";
     //result = NOT_AUTHORIZED;
 
+    if (result == SUCCESS)
+    {
+        int index = 3;
+        pcp_mapping_add (index,
+                         map_req->mapping_nonce,
+                         map_req->internal_port,
+                         assigned_ext_port,
+                         lifetime,
+                         MAP_OPCODE,
+                         map_req->protocol);
+
+        pcp_mapping mapping = pcp_mapping_find (index);
+
+        if (mapping != NULL)
+        {
+            print_pcp_mapping (mapping);
+
+            pcp_mapping_destroy (mapping);
+        }
+        else
+        {
+            puts ("Mapping returned was null.");    // TODO: syslog when complete instead of puts
+        }
+
+    }
+
     map_resp =
         new_pcp_map_response (map_req, lifetime, result, assigned_ext_port,
                               assigned_ext_ip);

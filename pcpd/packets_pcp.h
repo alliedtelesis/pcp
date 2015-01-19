@@ -9,6 +9,7 @@
 
 #define MAX_STRING_LEN 256
 #define PACKED  __attribute__((packed))
+
 #define PCP_VERSION 2
 #define RESPONSE_RESERVED_SIZE 3
 #define MAPPING_NONCE_SIZE 3
