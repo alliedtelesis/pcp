@@ -14,7 +14,7 @@ all: $(LIBRARY).so
 install: all
 	@install -D $(LIBRARY).so $(DESTDIR)/$(PREFIX)/lib/$(LIBRARY).so
 	@install -d $(DESTDIR)/$(PREFIX)/include
-	@install -D libpcp.h $(DESTDIR)/$(PREFIX)/include/libpcp.h
+	@install -D $(LIBRARY).h $(DESTDIR)/$(PREFIX)/include/$(LIBRARY).h
 
 clean:
 	@echo "Cleaning..."

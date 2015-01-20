@@ -1,6 +1,6 @@
 #include <np.h> /* NovaProva library */
-#include "../packets_pcp.h"
-#include "../packets_pcp_serialization.h"
+#include "../pcpd/packets_pcp.h"
+#include "../pcpd/packets_pcp_serialization.h"
 #include "stdlib.h"
 #include <stdint.h>
 #include <stdio.h>
