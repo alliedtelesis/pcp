@@ -272,6 +272,35 @@ pcp_mapping_find (int mapping_id)
     return NULL;
 }
 
+static int
+mapping_index_cmp (gconstpointer _a, gconstpointer _b)
+{
+    return ((pcp_mapping) _a)->index - ((pcp_mapping) _b)->index;
+}
+
+GList *
+pcp_mapping_getall (void)
+{
+    GList *mappings= NULL;
+    GList *paths = apteryx_search (MAPPING_PATH "/");
+    GList *iter;
+    for (iter = paths; iter; iter = g_list_next (iter))
+    {
+        pcp_mapping mapping;
+        int id;
+        char *tmp = strrchr ((char *) iter->data, '/');
+        if (!tmp)
+            continue;
+        /* read the ID */
+        id = atoi (++tmp);
+        mapping = pcp_mapping_find (id);
+        if (mapping)
+            mappings = g_list_insert_sorted (mappings, mapping, mapping_index_cmp);
+    }
+    g_list_free_full (paths, free);
+    return mappings;
+}
+
 void
 pcp_mapping_destroy (pcp_mapping mapping)
 {
@@ -619,47 +648,78 @@ print_pcp_apteryx_config (void)
     g_list_free_full (paths, free);
 }
 
+// TODO: Move out of watches section
 void
-print_pcp_mapping (pcp_mapping mapping)
+pcp_mapping_print (pcp_mapping mapping)
 {
     if (mapping)
     {
         char internal_ip_str[INET6_ADDRSTRLEN];
         char external_ip_str[INET6_ADDRSTRLEN];
+        u_int32_t lifetime_remaining;
 
         inet_ntop(AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
 
-        printf ("PCP Mapping:\n"
-                "     %-36.35s: %s\n"
-                "     %-36.35s: %d\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %s\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %s\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %u\n"
-                "     %-36.35s: %s\n"
-                "     %-36.35s: %u\n",
-                "Path", mapping->path,
-                "Index", mapping->index,
-                "Mapping nonce 1", mapping->mapping_nonce[0],
-                "Mapping nonce 2", mapping->mapping_nonce[1],
-                "Mapping nonce 3", mapping->mapping_nonce[2],
-                "Internal IP", internal_ip_str,
-                "Internal port", mapping->internal_port,
-                "External IP", external_ip_str,
-                "External port", mapping->external_port,
-                "Lifetime", mapping->lifetime,
-                "Start of life", mapping->start_of_life,
-                "Opcode", (mapping->opcode == MAP_OPCODE) ? "MAP" : "PEER",
-                "Protocol", mapping->protocol);
+        if (mapping->start_of_life + mapping->lifetime > time (NULL))
+            lifetime_remaining = mapping->start_of_life + mapping->lifetime - (u_int32_t) time (NULL);
+        else
+            lifetime_remaining = 0;
+
+        printf ("     %-21.20s: %d\n"
+                "       %-19.18s: %10u %10u %10u\n"
+                "       %-19.18s: [%s]:%u\n"
+                "       %-19.18s: [%s]:%u\n"
+                "       %-19.18s: %u\n"
+                "       %-19.18s: %u\n"
+                "       %-19.18s: %u\n"
+                "         To remove later\n" // TODO: Remove later
+                "         %-17.16s: %s\n"
+                "         %-17.16s: %u\n\n",
+                (mapping->opcode == MAP_OPCODE) ? "MAP mapping ID" : "PEER mapping ID",
+                mapping->index,
+                "Mapping nonce",
+                mapping->mapping_nonce[0],
+                mapping->mapping_nonce[1],
+                mapping->mapping_nonce[2],
+                "Internal IP & port",
+                internal_ip_str,
+                mapping->internal_port,
+                "External IP & port",
+                external_ip_str,
+                mapping->external_port,
+                "Lifetime",
+                mapping->lifetime,
+                "Lifetime remaining",
+                lifetime_remaining,
+                "Protocol",
+                mapping->protocol,
+                "Path",  // TODO: Remove later
+                mapping->path,
+                "Start of life",
+                mapping->start_of_life);
     }
     else
     {
         puts ("null");
     }
+}
+
+void
+pcp_mapping_printall (void)
+{
+    GList *mappings = pcp_mapping_getall ();
+    GList *elem;
+    pcp_mapping mapping = NULL;
+
+    for (elem = mappings; elem; elem = elem->next)
+    {
+      mapping = (pcp_mapping) elem->data;
+
+      pcp_mapping_print (mapping);
+
+      pcp_mapping_destroy (mapping);
+    }
+
+    g_list_free (mappings);
 }

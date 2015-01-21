@@ -370,7 +370,7 @@ process_map_request (unsigned char *pkt_buf)
 
     if (result == SUCCESS)
     {
-        int index = 3;
+        int index = -1;     // Next highest index
         pcp_mapping_add (index,
                          map_req->mapping_nonce,
                          &(map_req->header.client_ip),
@@ -381,19 +381,9 @@ process_map_request (unsigned char *pkt_buf)
                          MAP_OPCODE,
                          map_req->protocol);
 
-        pcp_mapping mapping = pcp_mapping_find (index);
-
-        if (mapping != NULL)
-        {
-            print_pcp_mapping (mapping);
-
-            pcp_mapping_destroy (mapping);
-        }
-        else
-        {
-            puts ("Mapping returned was null.");    // TODO: syslog when complete instead of puts
-        }
-
+        puts("\n printing all mappings");
+        pcp_mapping_printall ();
+        puts(" end printing all mappings\n");
     }
 
     map_resp =

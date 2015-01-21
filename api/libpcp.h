@@ -50,6 +50,8 @@ pcp_mapping_add (int index,
 
 pcp_mapping pcp_mapping_find (int mapping_id);
 
+GList *pcp_mapping_getall (void);
+
 void pcp_mapping_destroy (pcp_mapping mapping);
 
 bool pcp_load_config (void);
@@ -136,6 +138,8 @@ bool pcp_register_cb (pcp_callbacks *cb);
 
 // TODO: remove
 void print_pcp_apteryx_config (void);
-void print_pcp_mapping (pcp_mapping mapping);
+// TODO: somehow get output into show pcp and write pcp state
+void pcp_mapping_print (pcp_mapping mapping);
+void pcp_mapping_printall (void);
 
 #endif /* LIBPCP_H */
