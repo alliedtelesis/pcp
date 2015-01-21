@@ -40,9 +40,9 @@ void pcp_deinit (void);
 bool // TODO: Decide if bool or enum of error types
 pcp_mapping_add (int index,
                  u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
-                 //struct in6_addr internal_ip, //TODO: remove comment
+                 struct in6_addr *internal_ip,
                  u_int16_t internal_port,
-                 //struct in6_addr external_ip, //TODO: remove comment
+                 struct in6_addr *external_ip,
                  u_int16_t external_port,
                  u_int32_t end_of_life,
                  u_int8_t opcode,

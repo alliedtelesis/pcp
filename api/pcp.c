@@ -15,6 +15,7 @@
 #include <syslog.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <apteryx.h>
 
 #include "libpcp.h"
@@ -60,9 +61,9 @@ struct pcp_mapping_s
     char *path;
     int index;
     u_int32_t mapping_nonce[MAPPING_NONCE_SIZE];
-//    struct in6_addr internal_ip;
+    struct in6_addr internal_ip;
     u_int16_t internal_port;
-//    struct in6_addr external_ip;
+    struct in6_addr external_ip;
     u_int16_t external_port;
     u_int32_t lifetime;         // assigned_lifetime
     u_int32_t start_of_life;    // call time (NULL) at start
@@ -83,6 +84,51 @@ void
 pcp_deinit (void)
 {
     apteryx_shutdown ();
+}
+
+bool
+apteryx_set_ipv6_addr (const char *path, const char *key, struct in6_addr value)
+{
+    char *full_path;
+    size_t len;
+    bool res = false;
+
+    /* Create full path */
+    if (key)
+        len = asprintf (&full_path, "%s/%s", path, key);
+    else
+        len = asprintf (&full_path, "%s", path);
+    if (len)
+    {
+        res = apteryx_set (full_path, value.s6_addr, sizeof (struct in6_addr));
+        free (full_path);
+    }
+    return res;
+}
+
+struct in6_addr
+apteryx_get_ipv6_addr (const char *path, const char *key)
+{
+    char *full_path;
+    size_t len;
+    unsigned char *v = NULL;
+    struct in6_addr value;
+
+    /* Create full path */
+    if (key)
+        len = asprintf (&full_path, "%s/%s", path, key);
+    else
+        len = asprintf (&full_path, "%s", path);
+    if (len)
+    {
+        if (apteryx_get (full_path, &v, &len) && v)
+        {
+            memcpy (value.s6_addr, v, sizeof (struct in6_addr));
+            free (v);
+        }
+        free (full_path);
+    }
+    return value;
 }
 
 static int
@@ -126,9 +172,9 @@ next_highest_id (const char *path)
 bool // TODO: Decide if bool or enum of error types
 pcp_mapping_add (int index,
                  u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
-                 //struct in6_addr internal_ip, //TODO: remove comment
+                 struct in6_addr *internal_ip,
                  u_int16_t internal_port,
-                 //struct in6_addr external_ip, //TODO: remove comment
+                 struct in6_addr *external_ip,
                  u_int16_t external_port,
                  u_int32_t lifetime,
                  u_int8_t opcode,
@@ -161,9 +207,9 @@ pcp_mapping_add (int index,
     apteryx_set_int (path, MAPPING_NONCE_1_KEY, mapping_nonce[0]);
     apteryx_set_int (path, MAPPING_NONCE_2_KEY, mapping_nonce[1]);
     apteryx_set_int (path, MAPPING_NONCE_3_KEY, mapping_nonce[2]);
-    // TODO: int ip
+    apteryx_set_ipv6_addr (path, INTERNAL_IP_KEY, *internal_ip);
     apteryx_set_int (path, INTERNAL_PORT_KEY, internal_port);
-    // TODO: ext ip
+    apteryx_set_ipv6_addr (path, EXTERNAL_IP_KEY, *external_ip);
     apteryx_set_int (path, EXTERNAL_PORT_KEY, external_port);
     apteryx_set_int (path, LIFETIME_KEY, lifetime);
     apteryx_set_int (path, START_OF_LIFE_KEY, time (NULL));
@@ -194,9 +240,9 @@ pcp_mapping_find (int mapping_id)
     mapping->mapping_nonce[0] = apteryx_get_int (mapping->path, MAPPING_NONCE_1_KEY);
     mapping->mapping_nonce[1] = apteryx_get_int (mapping->path, MAPPING_NONCE_2_KEY);
     mapping->mapping_nonce[2] = apteryx_get_int (mapping->path, MAPPING_NONCE_3_KEY);
-    // TODO: Int .IP
+    mapping->internal_ip = apteryx_get_ipv6_addr (mapping->path, INTERNAL_IP_KEY);
     mapping->internal_port = apteryx_get_int (mapping->path, INTERNAL_PORT_KEY);
-    // TODO: Ext .IP
+    mapping->external_ip = apteryx_get_ipv6_addr (mapping->path, EXTERNAL_IP_KEY);
     mapping->external_port = apteryx_get_int (mapping->path, EXTERNAL_PORT_KEY);
     mapping->lifetime = apteryx_get_int (mapping->path, LIFETIME_KEY);
     mapping->start_of_life = apteryx_get_int (mapping->path, START_OF_LIFE_KEY);
@@ -575,13 +621,21 @@ print_pcp_mapping (pcp_mapping mapping)
 {
     if (mapping)
     {
+        char internal_ip_str[INET6_ADDRSTRLEN];
+        char external_ip_str[INET6_ADDRSTRLEN];
+
+        inet_ntop(AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
+        inet_ntop(AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
+
         printf ("PCP Mapping:\n"
                 "     %-36.35s: %s\n"
                 "     %-36.35s: %d\n"
                 "     %-36.35s: %u\n"
                 "     %-36.35s: %u\n"
                 "     %-36.35s: %u\n"
+                "     %-36.35s: %s\n"
                 "     %-36.35s: %u\n"
+                "     %-36.35s: %s\n"
                 "     %-36.35s: %u\n"
                 "     %-36.35s: %u\n"
                 "     %-36.35s: %u\n"
@@ -592,9 +646,9 @@ print_pcp_mapping (pcp_mapping mapping)
                 "Mapping nonce 1", mapping->mapping_nonce[0],
                 "Mapping nonce 2", mapping->mapping_nonce[1],
                 "Mapping nonce 3", mapping->mapping_nonce[2],
-                // TOOD: Int. IP
+                "Internal IP", internal_ip_str,
                 "Internal port", mapping->internal_port,
-                // TOOD: Ext. IP
+                "External IP", external_ip_str,
                 "External port", mapping->external_port,
                 "Lifetime", mapping->lifetime,
                 "Start of life", mapping->start_of_life,

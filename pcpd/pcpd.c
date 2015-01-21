@@ -373,7 +373,9 @@ process_map_request (unsigned char *pkt_buf)
         int index = 3;
         pcp_mapping_add (index,
                          map_req->mapping_nonce,
+                         &(map_req->header.client_ip),
                          map_req->internal_port,
+                         &assigned_ext_ip,
                          assigned_ext_port,
                          lifetime,
                          MAP_OPCODE,

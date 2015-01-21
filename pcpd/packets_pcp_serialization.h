@@ -9,7 +9,7 @@ unsigned char *serialize_u_int16_t (unsigned char *buffer, u_int16_t value);
 
 unsigned char *serialize_u_int32_t (unsigned char *buffer, u_int32_t value);
 
-unsigned char *serialize_ip_address (unsigned char *buffer, struct in6_addr ip_address);
+unsigned char *serialize_ip_address (unsigned char *buffer, struct in6_addr *ip_address);
 
 unsigned char *serialize_u_int32_t_array3 (unsigned char *buffer, u_int32_t value[3]);
 

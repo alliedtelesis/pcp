@@ -88,7 +88,7 @@ test_serialize_ip_address (void)
     unsigned char *ptr;
     char hex_buffer[MAX_STRING_LEN];
 
-    ptr = serialize_ip_address (buffer, test_ip_address);
+    ptr = serialize_ip_address (buffer, &test_ip_address);
     partial_hexdump (buffer, ptr - buffer, hex_buffer);
 
     NP_ASSERT_EQUAL (ptr - buffer, sizeof (struct in6_addr));

@@ -43,10 +43,10 @@ serialize_u_int32_t (unsigned char *buffer, u_int32_t value)
 }
 
 unsigned char *
-serialize_ip_address (unsigned char *buffer, struct in6_addr ip_address)
+serialize_ip_address (unsigned char *buffer, struct in6_addr *ip_address)
 {
-    memcpy (buffer, ip_address.s6_addr, 16);
-    return buffer + 16;
+    memcpy (buffer, ip_address->s6_addr, sizeof (struct in6_addr));
+    return buffer + sizeof (struct in6_addr);
 }
 
 unsigned char *
@@ -73,7 +73,7 @@ serialize_request_header (unsigned char *buffer, pcp_request_header *header)
     buffer = serialize_u_int8_t (buffer, header->r_opcode);
     buffer = serialize_u_int16_t (buffer, header->reserved);
     buffer = serialize_u_int32_t (buffer, header->requested_lifetime);
-    buffer = serialize_ip_address (buffer, header->client_ip);
+    buffer = serialize_ip_address (buffer, &(header->client_ip));
     return buffer;
 }
 
@@ -100,7 +100,7 @@ serialize_map_request (unsigned char *buffer, map_request *data)
     buffer = serialize_u_int16_t (buffer, data->reserved_2);
     buffer = serialize_u_int16_t (buffer, data->internal_port);
     buffer = serialize_u_int16_t (buffer, data->suggested_external_port);
-    buffer = serialize_ip_address (buffer, data->suggested_external_ip);
+    buffer = serialize_ip_address (buffer, &(data->suggested_external_ip));
     return buffer;
 }
 
@@ -114,7 +114,7 @@ serialize_map_response (unsigned char *buffer, map_response *data)
     buffer = serialize_u_int16_t (buffer, data->reserved_2);
     buffer = serialize_u_int16_t (buffer, data->internal_port);
     buffer = serialize_u_int16_t (buffer, data->assigned_external_port);
-    buffer = serialize_ip_address (buffer, data->assigned_external_ip);
+    buffer = serialize_ip_address (buffer, &(data->assigned_external_ip));
     return buffer;
 }
 
@@ -148,8 +148,8 @@ deserialize_u_int32_t (u_int32_t *dest, unsigned char *data)
 unsigned char *
 deserialize_ip_address (struct in6_addr *ip_address, unsigned char *data)
 {
-    memcpy (ip_address->s6_addr, data, 16);
-    return data + 16;
+    memcpy (ip_address->s6_addr, data, sizeof (struct in6_addr));
+    return data + sizeof (struct in6_addr);
 }
 
 unsigned char *
