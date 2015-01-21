@@ -343,7 +343,8 @@ process_map_request (unsigned char *pkt_buf)
 
     u_int32_t lifetime;
     u_int16_t assigned_ext_port;
-    char *assigned_ext_ip;
+    char *assigned_ext_ip_str;
+    struct in6_addr assigned_ext_ip;
     result_code result;
 
     map_req = deserialize_map_request (pkt_buf);
@@ -359,7 +360,12 @@ process_map_request (unsigned char *pkt_buf)
      */
     lifetime = 9001;    // Lifetime of mapping or expected lifetime of resulting error
     assigned_ext_port = 4321;
-    assigned_ext_ip = "80fe::2020:ff3b:2eef:3829";
+    assigned_ext_ip_str = "80fe::2020:ff3b:2eef:3829";
+    if (!inet_pton (AF_INET6, assigned_ext_ip_str, &assigned_ext_ip))
+    {
+        perror ("failed parsing");
+        result = NETWORK_FAILURE;
+    }
     //result = NOT_AUTHORIZED;
 
     if (result == SUCCESS)
@@ -390,7 +396,7 @@ process_map_request (unsigned char *pkt_buf)
 
     map_resp =
         new_pcp_map_response (map_req, lifetime, result, assigned_ext_port,
-                              assigned_ext_ip);
+                              &assigned_ext_ip);
 
     ptr = serialize_map_response (pkt_buf, map_resp);
 

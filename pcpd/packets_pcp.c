@@ -83,14 +83,15 @@ new_pcp_map_request (u_int32_t requested_lifetime, const char *ip6str)
  *  a PCP MAP request and the creation of the mapping.
  * @param lifetime - Lifetime of mapping or expected lifetime of error
  * @param port - The assigned external port
- * @param ip6str - The ipv6 string of assigned external port (probably should be struct)
+ * @param ipv6_addr - The ipv6 address of assigned external address
  * @return - The MAP response packet
  */
 map_response *
 new_pcp_map_response (map_request *map_req,
                       u_int32_t lifetime, result_code result, u_int16_t port,
-                      const char *ip6str)
+                      struct in6_addr *ipv6_addr)
 {
+    // TODO: Make function work as described in RFC page 24/25
     map_response *map_resp = malloc (sizeof (map_response));
     new_pcp_response_header (&map_resp->header, MAP_OPCODE, result, lifetime);
     map_resp->mapping_nonce[0] = map_req->mapping_nonce[0];
@@ -105,14 +106,12 @@ new_pcp_map_response (map_request *map_req,
     {
         // If SUCCESS, put actual values of assigned ip/port in, NOT copy over from request
         map_resp->assigned_external_port = port;
-        if (!inet_pton (AF_INET6, ip6str, &(map_resp->assigned_external_ip)))
-            perror ("failed parsing");
+        map_resp->assigned_external_ip = *ipv6_addr;
     }
     else
     {
         map_resp->assigned_external_port = map_req->suggested_external_port;
-        memcpy (&map_resp->assigned_external_ip, &map_req->suggested_external_ip,
-                sizeof (struct in6_addr));
+        map_resp->assigned_external_ip = map_req->suggested_external_ip;
     }
     return map_resp;
 }

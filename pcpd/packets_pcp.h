@@ -53,7 +53,7 @@ typedef enum
     MALFORMED_OPTION,
     NETWORK_FAILURE,
     NO_RESOURCES,
-    NSUPP_PROTOCOL,
+    UNSUPP_PROTOCOL,
     USER_EX_QUOTA,
     CANNOT_PROVIDE_EXTERNAL,
     ADDRESS_MISMATCH,
@@ -243,7 +243,7 @@ map_request *new_pcp_map_request (u_int32_t requested_lifetime, const char *ip6s
 
 map_response *new_pcp_map_response (map_request *pcp_map_request,
                                     u_int32_t lifetime, result_code result, u_int16_t port,
-                                    const char *ip6str);
+                                    struct in6_addr *ipv6_addr);
 
 // Create new PCP PEER packets
 peer_request *new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip6str);
