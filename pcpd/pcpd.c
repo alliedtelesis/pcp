@@ -546,7 +546,8 @@ main (int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    pcp_load_config (); // apply default config if first time running, otherwise load defaults
+    // apply default config if first time running, otherwise load current config
+    pcp_load_config ();
 
     print_pcp_apteryx_config (); // TODO: remove
 

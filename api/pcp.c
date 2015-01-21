@@ -78,6 +78,9 @@ void
 pcp_init (void)
 {
     apteryx_init (false);
+    apteryx_set_string (ROOT_PATH, NULL, "-");
+    apteryx_set_string (CONFIG_PATH, NULL, "-");
+    apteryx_set_string (MAPPING_PATH, NULL, "-");
 }
 
 void
