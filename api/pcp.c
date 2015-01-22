@@ -86,6 +86,7 @@ pcp_init (void)
 void
 pcp_deinit (void)
 {
+    pcp_mapping_deleteall ();
     apteryx_shutdown ();
 }
 
@@ -225,6 +226,27 @@ pcp_mapping_add (int index,
     return true;            // Success
 }
 
+bool
+pcp_mapping_delete (int index)
+{
+    char *tmp;
+    if (asprintf (&tmp, MAPPING_PATH "/%d", index) > 0)
+    {
+        apteryx_prune (tmp);
+        free (tmp);
+        return true;
+    }
+    return false;
+}
+
+bool
+pcp_mapping_deleteall (void)
+{
+    bool status = apteryx_prune (MAPPING_PATH);
+    apteryx_set_string (MAPPING_PATH, NULL, "-");
+    return status;
+}
+
 pcp_mapping
 pcp_mapping_find (int mapping_id)
 {
@@ -299,6 +321,12 @@ pcp_mapping_getall (void)
     }
     g_list_free_full (paths, free);
     return mappings;
+}
+
+int
+pcp_mapping_id_get (pcp_mapping mapping)
+{
+    return mapping ? mapping->index : -1;
 }
 
 void

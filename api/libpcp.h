@@ -48,6 +48,10 @@ pcp_mapping_add (int index,
                  u_int8_t opcode,
                  u_int8_t protocol);
 
+bool pcp_mapping_delete (int index);
+
+bool pcp_mapping_deleteall (void);
+
 pcp_mapping pcp_mapping_find (int mapping_id);
 
 GList *pcp_mapping_getall (void);
