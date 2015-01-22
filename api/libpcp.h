@@ -12,6 +12,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <glib.h>
+#include <netinet/in.h>
 
 #define PCP_VERSION 2
 #define RESPONSE_RESERVED_SIZE 3
@@ -29,6 +31,22 @@
 #define DEFAULT_MAX_MAPPING_LIFETIME 86400
 #define DEFAULT_PREFER_FAILURE_REQ_RATE_LIMIT 256
 
+
+/** Mapping handle */
+struct pcp_mapping_s
+{
+    char *path;
+    int index;
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE];
+    struct in6_addr internal_ip;
+    u_int16_t internal_port;
+    struct in6_addr external_ip;
+    u_int16_t external_port;
+    u_int32_t lifetime;         // assigned_lifetime
+    u_int32_t start_of_life;    // call time (NULL) at start
+    u_int8_t opcode;            // MAP or PEER opcode
+    u_int8_t protocol;
+};
 
 typedef struct pcp_mapping_s *pcp_mapping;
 

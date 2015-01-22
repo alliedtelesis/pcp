@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <apteryx.h>
@@ -56,22 +55,6 @@
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
 
 #define CHECK_NOT_NULL(s_ptr, val, ret_null) s_ptr ? s_ptr->val : ret_null
-
-/** Mapping handle */
-struct pcp_mapping_s
-{
-    char *path;
-    int index;
-    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE];
-    struct in6_addr internal_ip;
-    u_int16_t internal_port;
-    struct in6_addr external_ip;
-    u_int16_t external_port;
-    u_int32_t lifetime;         // assigned_lifetime
-    u_int32_t start_of_life;    // call time (NULL) at start
-    u_int8_t opcode;            // MAP or PEER opcode
-    u_int8_t protocol;
-};
 
 static pcp_callbacks *saved_cbs = NULL;
 static pthread_mutex_t callback_lock = PTHREAD_MUTEX_INITIALIZER;
