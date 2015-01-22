@@ -37,6 +37,9 @@ void pcp_init (void);
 
 void pcp_deinit (void);
 
+
+/* Mappings */
+
 bool // TODO: Decide if bool or enum of error types
 pcp_mapping_add (int index,
                  u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
@@ -56,7 +59,36 @@ pcp_mapping pcp_mapping_find (int mapping_id);
 
 GList *pcp_mapping_getall (void);
 
+int pcp_mapping_id_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_mapping_nonce_1_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_mapping_nonce_2_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_mapping_nonce_3_get (pcp_mapping mapping);
+
+struct in6_addr pcp_mapping_internal_ip_get (pcp_mapping mapping);
+
+u_int16_t pcp_mapping_internal_port_get (pcp_mapping mapping);
+
+struct in6_addr pcp_mapping_external_ip_get (pcp_mapping mapping);
+
+u_int16_t pcp_mapping_external_port_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_lifetime_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_start_of_life_get (pcp_mapping mapping);
+
+u_int32_t pcp_mapping_remaining_lifetime_get (pcp_mapping mapping);
+
+u_int8_t pcp_mapping_opcode_get (pcp_mapping mapping);
+
+u_int8_t pcp_mapping_protocol_get (pcp_mapping mapping);
+
 void pcp_mapping_destroy (pcp_mapping mapping);
+
+
+/* Config */
 
 bool pcp_load_config (void);
 

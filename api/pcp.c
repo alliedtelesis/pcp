@@ -55,6 +55,8 @@
 #define MAX_MAPPING_LIFETIME_KEY "max_mapping_lifetime"
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
 
+#define CHECK_NOT_NULL(s_ptr, val, ret_null) s_ptr ? s_ptr->val : ret_null
+
 /** Mapping handle */
 struct pcp_mapping_s
 {
@@ -326,7 +328,92 @@ pcp_mapping_getall (void)
 int
 pcp_mapping_id_get (pcp_mapping mapping)
 {
-    return mapping ? mapping->index : -1;
+    return CHECK_NOT_NULL (mapping, index, -1);
+}
+
+u_int32_t
+pcp_mapping_mapping_nonce_1_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, mapping_nonce[0], 0);
+}
+
+u_int32_t
+pcp_mapping_mapping_nonce_2_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, mapping_nonce[1], 0);
+}
+
+u_int32_t
+pcp_mapping_mapping_nonce_3_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, mapping_nonce[2], 0);
+}
+
+struct in6_addr
+pcp_mapping_internal_ip_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, internal_ip, (struct in6_addr) {{{ 0 }}});
+}
+
+u_int16_t
+pcp_mapping_internal_port_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, internal_port, 0);
+}
+
+struct in6_addr
+pcp_mapping_external_ip_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, external_ip, (struct in6_addr) {{{ 0 }}});
+}
+
+u_int16_t
+pcp_mapping_external_port_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, external_port, 0);
+}
+
+u_int32_t
+pcp_mapping_lifetime_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, lifetime, 0);
+}
+
+u_int32_t
+pcp_mapping_start_of_life_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, start_of_life, 0);
+}
+
+u_int32_t
+pcp_mapping_remaining_lifetime_get (pcp_mapping mapping)
+{
+    u_int32_t time_alive;
+    u_int32_t lifetime_remaining;
+
+    if (!mapping)
+        return 0;
+
+    time_alive = time (NULL) - mapping->start_of_life;
+
+    if (time_alive > mapping->lifetime)
+        lifetime_remaining = 0;
+    else
+        lifetime_remaining = mapping->lifetime - time_alive;
+
+    return lifetime_remaining;
+}
+
+u_int8_t
+pcp_mapping_opcode_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, opcode, 0);
+}
+
+u_int8_t
+pcp_mapping_protocol_get (pcp_mapping mapping)
+{
+    return CHECK_NOT_NULL (mapping, protocol, 0);
 }
 
 void
@@ -684,15 +771,9 @@ pcp_mapping_print (pcp_mapping mapping)
     {
         char internal_ip_str[INET6_ADDRSTRLEN];
         char external_ip_str[INET6_ADDRSTRLEN];
-        u_int32_t lifetime_remaining;
 
         inet_ntop(AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
-
-        if (mapping->start_of_life + mapping->lifetime > time (NULL))
-            lifetime_remaining = mapping->start_of_life + mapping->lifetime - (u_int32_t) time (NULL);
-        else
-            lifetime_remaining = 0;
 
         printf ("     %-21.20s: %d\n"
                 "       %-19.18s: %10u %10u %10u\n"
@@ -719,7 +800,7 @@ pcp_mapping_print (pcp_mapping mapping)
                 "Lifetime",
                 mapping->lifetime,
                 "Lifetime remaining",
-                lifetime_remaining,
+                pcp_mapping_remaining_lifetime_get (mapping),
                 "Protocol",
                 mapping->protocol,
                 "Path",  // TODO: Remove later
