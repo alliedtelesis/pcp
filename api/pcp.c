@@ -813,11 +813,11 @@ pcp_mapping_printall (void)
 
     for (elem = mappings; elem; elem = elem->next)
     {
-      mapping = (pcp_mapping) elem->data;
+        mapping = (pcp_mapping) elem->data;
 
-      pcp_mapping_print (mapping);
+        pcp_mapping_print (mapping);
 
-      pcp_mapping_destroy (mapping);
+        pcp_mapping_destroy (mapping);
     }
 
     g_list_free (mappings);

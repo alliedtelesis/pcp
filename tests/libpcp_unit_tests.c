@@ -6,8 +6,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-/* Give apteryx 1/10th of a second to start or close */
-#define WAIT_TIME 100 * 1000
+/* Give apteryx time to start or close */
+#define WAIT_TIME 150 * 1000
 
 int
 set_up (void)
@@ -119,11 +119,11 @@ test_prefer_failure_req_rate_limit_set_get (void)
     NP_ASSERT_EQUAL (prefer_failure_req_rate_limit_get (), DEFAULT_PREFER_FAILURE_REQ_RATE_LIMIT);
 }
 
+/* Test the load config function when PCP has not yet been initialized. This will load the
+ * default config and simultaneously tests the config_set_default function. */
 void
 test_pcp_load_config (void)
 {
-    /* PCP config will have not been initialized so this will load the default config.
-     * This simultaneously tests the config_set_default function. */
     NP_ASSERT_TRUE (pcp_load_config ());
 
     NP_ASSERT_EQUAL (pcp_initialized_get (), true);
@@ -139,6 +139,7 @@ test_pcp_load_config (void)
     NP_ASSERT_EQUAL (prefer_failure_req_rate_limit_get (), DEFAULT_PREFER_FAILURE_REQ_RATE_LIMIT);
 }
 
+/* Test the apteryx set and get functions for IPv6 addresses introduced in libpcp */
 void
 test_apteryx_set_get_ipv6_addr (void)
 {
@@ -157,10 +158,24 @@ test_apteryx_set_get_ipv6_addr (void)
     }
 }
 
+/* Test the function for freeing memory for PCP mappings */
 void
-test_pcp_mapping_add (void)
+test_pcp_mapping_destroy (void)
 {
-    int index = 254;
+    pcp_mapping mapping;
+
+    // Allocate some memory
+    mapping = calloc (1, sizeof (*mapping));
+    asprintf (&mapping->path, "/pcp/testpath/123");
+
+    // Free it. Valgrind will fail the test if not freed properly.
+    pcp_mapping_destroy (mapping);
+}
+
+/* Helper functions that add mappings to apteryx */
+static void
+add_test_mapping (int index)
+{
     u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = {1732282673, 1882683910, 2109096625};
     struct in6_addr internal_ip;
     u_int16_t internal_port = 1234;
@@ -169,7 +184,6 @@ test_pcp_mapping_add (void)
     u_int32_t lifetime = 8002;
     u_int8_t opcode = MAP_OPCODE;
     u_int8_t protocol = 6;
-    int i;
 
     inet_pton (AF_INET6, "2001:db8:7654:3210:fedc:ba98:7654:3210", &(internal_ip));
     inet_pton (AF_INET6, "2001:db8:7654:1234:fedc:abab:4554:9875", &(external_ip));
@@ -177,12 +191,76 @@ test_pcp_mapping_add (void)
     NP_ASSERT_TRUE (pcp_mapping_add (index, mapping_nonce, &internal_ip,
                                      internal_port, &external_ip, external_port,
                                      lifetime, opcode, protocol));
+}
 
-    pcp_mapping mapping = pcp_mapping_find (index);
+static void
+add_three_test_mappings (int index1, int index2, int index3)
+{
+    add_test_mapping (index1);
+    add_test_mapping (index2);
+    add_test_mapping (index3);
+}
 
-    NP_ASSERT_TRUE (mapping != NULL);
+static void
+add_three_mappings (int index1,
+                    int index2,
+                    int index3,
+                    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
+                    struct in6_addr *internal_ip,
+                    u_int16_t internal_port,
+                    struct in6_addr *external_ip,
+                    u_int16_t external_port,
+                    u_int32_t lifetime,
+                    u_int8_t opcode,
+                    u_int8_t protocol)
+{
+    NP_ASSERT_TRUE (pcp_mapping_add (index1, mapping_nonce, internal_ip,
+                                     internal_port, external_ip, external_port,
+                                     lifetime, opcode, protocol));
 
-    NP_ASSERT_EQUAL (mapping->index, index);
+    NP_ASSERT_TRUE (pcp_mapping_add (index2, mapping_nonce, internal_ip,
+                                     internal_port, external_ip, external_port,
+                                     lifetime, opcode, protocol));
+
+    NP_ASSERT_TRUE (pcp_mapping_add (index3, mapping_nonce, internal_ip,
+                                     internal_port, external_ip, external_port,
+                                     lifetime, opcode, protocol));
+}
+
+/* Test the add and find functions */
+void
+test_pcp_mapping_add_find (void)
+{
+    int index1 = 54;
+    int index2 = 154;
+    int index3 = 254;
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = {1732282673, 1882683910, 2109096625};
+    struct in6_addr internal_ip;
+    u_int16_t internal_port = 1234;
+    struct in6_addr external_ip;
+    u_int16_t external_port = 9876;
+    u_int32_t lifetime = 8002;
+    u_int8_t opcode = MAP_OPCODE;
+    u_int8_t protocol = 6;
+    pcp_mapping mapping;
+    int i;
+
+    inet_pton (AF_INET6, "2001:db8:7654:3210:fedc:ba98:7654:3210", &(internal_ip));
+    inet_pton (AF_INET6, "2001:db8:7654:1234:fedc:abab:4554:9875", &(external_ip));
+
+    add_three_mappings (index1, index2, index3,
+                        mapping_nonce, &internal_ip,
+                        internal_port, &external_ip,
+                        external_port, lifetime,
+                        opcode, protocol);
+
+    /* Get the second one to check that find function doesn't just grab
+     * the first or last entry */
+    mapping = pcp_mapping_find (index2);
+
+    NP_ASSERT_NOT_NULL (mapping);
+
+    NP_ASSERT_EQUAL (mapping->index, index2);
     NP_ASSERT_EQUAL (mapping->internal_port, internal_port);
     NP_ASSERT_EQUAL (mapping->external_port, external_port);
     NP_ASSERT_EQUAL (mapping->lifetime, lifetime);
@@ -198,6 +276,149 @@ test_pcp_mapping_add (void)
         NP_ASSERT_EQUAL (mapping->internal_ip.s6_addr[i], internal_ip.s6_addr[i]);
         NP_ASSERT_EQUAL (mapping->external_ip.s6_addr[i], external_ip.s6_addr[i]);
     }
+
+    pcp_mapping_destroy (mapping);
+}
+
+/* Test the delete function. Test depends on the add and find functions */
+void
+test_pcp_mapping_delete (void)
+{
+    int index = 300;
+    pcp_mapping mapping;
+
+    add_test_mapping (index);
+
+    mapping = pcp_mapping_find (index);
+    NP_ASSERT_NOT_NULL (mapping);
+    pcp_mapping_destroy (mapping);
+
+    NP_ASSERT_TRUE (pcp_mapping_delete (index));
+    NP_ASSERT_NULL (pcp_mapping_find (index));
+}
+
+/* Test the deleteall function. Test depends on the add and find functions */
+void
+test_pcp_mapping_deleteall (void)
+{
+    int index1 = 400;
+    int index2 = 450;
+    int index3 = 500;
+    pcp_mapping mapping1;
+    pcp_mapping mapping2;
+    pcp_mapping mapping3;
+
+    add_three_test_mappings (index1, index2, index3);
+
+    mapping1 = pcp_mapping_find (index1);
+    mapping2 = pcp_mapping_find (index2);
+    mapping3 = pcp_mapping_find (index3);
+
+    NP_ASSERT_NOT_NULL (mapping1);
+    pcp_mapping_destroy (mapping1);
+
+    NP_ASSERT_NOT_NULL (mapping2);
+    pcp_mapping_destroy (mapping2);
+
+    NP_ASSERT_NOT_NULL (mapping3);
+    pcp_mapping_destroy (mapping3);
+
+    NP_ASSERT_TRUE (pcp_mapping_deleteall ());
+    NP_ASSERT_NULL (pcp_mapping_find (index1));
+    NP_ASSERT_NULL (pcp_mapping_find (index2));
+    NP_ASSERT_NULL (pcp_mapping_find (index3));
+}
+
+/* Test the getall function. Test depends on the add function */
+void
+test_pcp_mapping_getall (void)
+{
+    int index[3] = {400, 450, 500};
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = {1732282673, 1882683910, 2109096625};
+    struct in6_addr internal_ip;
+    u_int16_t internal_port = 1234;
+    struct in6_addr external_ip;
+    u_int16_t external_port = 9876;
+    u_int32_t lifetime = 8002;
+    u_int8_t opcode = MAP_OPCODE;
+    u_int8_t protocol = 6;
+    int i, j;
+
+    GList *mappings;
+    GList *elem;
+    pcp_mapping mapping = NULL;
+    int count = 0;
+
+    inet_pton (AF_INET6, "2001:db8:7654:3210:fedc:ba98:7654:3210", &(internal_ip));
+    inet_pton (AF_INET6, "2001:db8:7654:1234:fedc:abab:4554:9875", &(external_ip));
+
+    // Add mappings with indices out of sequence
+    add_three_mappings (index[2], index[0], index[1],
+                        mapping_nonce, &internal_ip,
+                        internal_port, &external_ip,
+                        external_port, lifetime,
+                        opcode, protocol);
+
+    mappings = pcp_mapping_getall ();
+
+    for (elem = mappings, i = 0; elem; elem = elem->next, i++)
+    {
+        mapping = (pcp_mapping) elem->data;
+        NP_ASSERT_NOT_NULL (mapping);
+
+        // Indices in GList mappings should be sorted
+        NP_ASSERT_EQUAL (mapping->index, index[i]);
+        NP_ASSERT_EQUAL (mapping->internal_port, internal_port);
+        NP_ASSERT_EQUAL (mapping->external_port, external_port);
+        NP_ASSERT_EQUAL (mapping->lifetime, lifetime);
+        NP_ASSERT_EQUAL (mapping->opcode, opcode);
+        NP_ASSERT_EQUAL (mapping->protocol, protocol);
+
+        for (j = 0; j < MAPPING_NONCE_SIZE; j++)
+        {
+            NP_ASSERT_EQUAL (mapping->mapping_nonce[j], mapping_nonce[j]);
+        }
+        for (j = 0; j < sizeof (struct in6_addr); j++)
+        {
+            NP_ASSERT_EQUAL (mapping->internal_ip.s6_addr[j], internal_ip.s6_addr[j]);
+            NP_ASSERT_EQUAL (mapping->external_ip.s6_addr[j], external_ip.s6_addr[j]);
+        }
+
+        count ++;
+
+        pcp_mapping_destroy (mapping);
+    }
+
+    g_list_free (mappings);
+
+    NP_ASSERT_EQUAL (count, 3);
+}
+
+/* Test the remaining lifetime get function. Test may fail if time goes to the next
+ * second in between the start_of_life assignment and remaining lifetime calculation. */
+void
+test_pcp_mapping_remaining_lifetime_get (void)
+{
+    pcp_mapping mapping;
+    u_int32_t lifetime;
+    u_int32_t time_alive;
+    u_int32_t start_of_life;
+    u_int32_t remaining_life;
+
+    // Allocate some memory
+    mapping = calloc (1, sizeof (*mapping));
+    asprintf (&mapping->path, "/pcp/testpath/123");
+
+    // Set lifetime variables
+    lifetime = 4000;
+    time_alive = 1000;
+    start_of_life = time (NULL) - time_alive;
+    mapping->lifetime = lifetime;
+    mapping->start_of_life = start_of_life;
+
+    // Calculate remaining lifetime and compare
+    remaining_life = pcp_mapping_remaining_lifetime_get (mapping);
+    NP_ASSERT_EQUAL (remaining_life, lifetime - time_alive);
 
     pcp_mapping_destroy (mapping);
 }
