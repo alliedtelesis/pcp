@@ -57,6 +57,10 @@ void pcp_deinit (void);
 
 void pcp_deinit_hard (void);
 
+bool apteryx_set_ipv6_addr (const char *path, const char *key, struct in6_addr value);
+
+struct in6_addr apteryx_get_ipv6_addr (const char *path, const char *key);
+
 
 /* Mappings */
 
@@ -67,7 +71,7 @@ pcp_mapping_add (int index,
                  u_int16_t internal_port,
                  struct in6_addr *external_ip,
                  u_int16_t external_port,
-                 u_int32_t end_of_life,
+                 u_int32_t lifetime,
                  u_int8_t opcode,
                  u_int8_t protocol);
 
