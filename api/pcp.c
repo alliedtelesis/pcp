@@ -75,6 +75,13 @@ pcp_deinit (void)
     apteryx_shutdown ();
 }
 
+void
+pcp_deinit_hard (void)
+{
+    apteryx_prune (ROOT_PATH);
+    apteryx_shutdown ();
+}
+
 bool
 apteryx_set_ipv6_addr (const char *path, const char *key, struct in6_addr value)
 {

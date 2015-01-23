@@ -55,6 +55,8 @@ void pcp_init (void);
 
 void pcp_deinit (void);
 
+void pcp_deinit_hard (void);
+
 
 /* Mappings */
 
