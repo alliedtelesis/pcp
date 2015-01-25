@@ -29,7 +29,6 @@
 #define OUTPUT_BUF_SIZE 2048
 #define SMALL_BUF_SIZE 32
 
-
 /* Long version of argument options */
 static struct option long_options[] = {
     { "output", required_argument, NULL, 'o' },
@@ -55,6 +54,9 @@ typedef struct _pcp_config
 
 /* Global config struct */
 pcp_config config;
+
+/* Global list of all current mappings */
+GList *mappings = NULL;
 
 
 /**
@@ -230,6 +232,8 @@ signal_handler (int signal)
     }
     if (signal == SIGINT || signal == SIGTERM)
     {
+        pcp_register_cb (NULL);
+        g_list_free_full (mappings, (GDestroyNotify) pcp_mapping_destroy);
         pcp_deinit ();
         exit (EXIT_SUCCESS);
     }
@@ -381,9 +385,15 @@ process_map_request (unsigned char *pkt_buf)
                          MAP_OPCODE,
                          map_req->protocol);
 
-        puts("\n printing all mappings");
-        pcp_mapping_printall ();
-        puts(" end printing all mappings\n");
+        puts("\n printing all mappings from apteryx");
+        GList *apteryx_mappings = pcp_mapping_getall ();
+        pcp_mapping_printall (apteryx_mappings);
+        g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+        puts(" end printing all mappings from apteryx\n");
+
+        puts("\n printing all mappings from local list");
+        pcp_mapping_printall (mappings);
+        puts(" end printing all mappings from local list\n");
     }
 
     map_resp =
@@ -470,6 +480,44 @@ prefer_failure_req_rate_limit (u_int32_t rate)
     config.prefer_failure_req_rate_limit = rate;
 }
 
+static int
+mapping_index_cmp (gconstpointer _a, gconstpointer _b)
+{
+    return ((pcp_mapping) _a)->index - ((pcp_mapping) _b)->index;
+}
+
+void
+new_pcp_mapping (int index,
+                 u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
+                 struct in6_addr internal_ip,
+                 u_int16_t internal_port,
+                 struct in6_addr external_ip,
+                 u_int16_t external_port,
+                 u_int32_t lifetime,
+                 u_int32_t start_of_life,
+                 u_int8_t opcode,
+                 u_int8_t protocol)
+{
+    pcp_mapping mapping;
+    mapping = malloc (sizeof (*mapping));
+
+    mapping->path = NULL;
+    mapping->index = index;
+    mapping->mapping_nonce[0] = mapping_nonce[0];
+    mapping->mapping_nonce[1] = mapping_nonce[1];
+    mapping->mapping_nonce[2] = mapping_nonce[2];
+    mapping->internal_ip = internal_ip;
+    mapping->internal_port = internal_port;
+    mapping->external_ip = external_ip;
+    mapping->external_port = external_port;
+    mapping->lifetime = lifetime;
+    mapping->start_of_life = start_of_life;
+    mapping->opcode = opcode;
+    mapping->protocol = protocol;
+
+    mappings = g_list_insert_sorted (mappings, mapping, mapping_index_cmp);
+}
+
 void
 run_loop (int sock, socklen_t fromlen)
 {
@@ -515,6 +563,7 @@ pcp_callbacks callbacks = {
     .min_mapping_lifetime = min_mapping_lifetime,
     .max_mapping_lifetime = max_mapping_lifetime,
     .prefer_failure_req_rate_limit = prefer_failure_req_rate_limit,
+    .new_pcp_mapping = new_pcp_mapping,
 };
 
 /**

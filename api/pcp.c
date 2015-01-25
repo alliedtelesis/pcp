@@ -244,7 +244,7 @@ pcp_mapping_find (int mapping_id)
 {
     char *tmp;
     pcp_mapping mapping;
-    mapping = calloc (1, sizeof (*mapping));
+    mapping = malloc (sizeof (*mapping));
 
     if (asprintf (&mapping->path, MAPPING_PATH "/%d", mapping_id) == 0 ||
         (tmp = apteryx_get_string (mapping->path, NULL)) == NULL)
@@ -266,23 +266,11 @@ pcp_mapping_find (int mapping_id)
     mapping->opcode = apteryx_get_int (mapping->path, OPCODE_KEY);
     mapping->protocol = apteryx_get_int (mapping->path, PROTOCOL_KEY);
 
-//    /* get application */ < Copied from firewall for reference
-//    if ((tmp = apteryx_get_string (rule->path, APPLICATION_KEY)) != NULL)
-//    {
-//        strncpy (rule->application, tmp, sizeof (rule->application));
-//        free (tmp);
-//    }
-//    else
-//    {
-//        goto error;
-//    }
-
-
     return mapping;
 
   error:
     pcp_mapping_destroy (mapping);
-    perror("error");
+    perror ("error finding mapping");
     return NULL;
 }
 
@@ -295,7 +283,7 @@ mapping_index_cmp (gconstpointer _a, gconstpointer _b)
 GList *
 pcp_mapping_getall (void)
 {
-    GList *mappings= NULL;
+    GList *mappings = NULL;
     GList *paths = apteryx_search (MAPPING_PATH "/");
     GList *iter;
     for (iter = paths; iter; iter = g_list_next (iter))
@@ -624,7 +612,7 @@ config_set_default (void)
  *************************/
 
 static bool
-pcp_config_change (const char *path, void *priv, const unsigned char *value,
+pcp_config_changed (const char *path, void *priv, const unsigned char *value,
                          size_t len)
 {
     const char *key = NULL;
@@ -711,6 +699,66 @@ pcp_config_change (const char *path, void *priv, const unsigned char *value,
     return true;
 }
 
+static bool
+pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
+                   size_t len)
+{
+    puts(path);
+    char *tmp = NULL;
+    int mapping_id = -1;
+    pcp_mapping mapping;
+    bool index_path_changed = true;
+
+    /* check we are in the right place */
+    if (strncmp (path, MAPPING_PATH "/", strlen (MAPPING_PATH "/")) != 0)
+        return false;
+
+    /* Parse the rule ID and key */
+    tmp = strdup (path + strlen (MAPPING_PATH "/"));
+    if (!tmp)
+        return false;
+
+    if (strchr (tmp, '/'))
+    {
+        // Another slash found means it was not the mapping's root index path that was changed
+        index_path_changed = false;
+        *strrchr (tmp, '/') = '\0';
+    }
+    if (sscanf (tmp, "%d", &mapping_id) != 1)
+    {
+        free (tmp);
+        return false;
+    }
+
+    mapping = pcp_mapping_find (mapping_id);
+    pthread_mutex_lock (&callback_lock);
+    if (!mapping)
+    {
+        // TODO: Call delete mapping
+    }
+    else if (index_path_changed)
+    {
+        if (saved_cbs && saved_cbs->new_pcp_mapping)
+        {
+            saved_cbs->new_pcp_mapping (mapping->index, mapping->mapping_nonce,
+                                        mapping->internal_ip, mapping->internal_port,
+                                        mapping->external_ip, mapping->external_port,
+                                        mapping->lifetime, mapping->start_of_life,
+                                        mapping->opcode, mapping->protocol);
+        }
+    }
+
+    if (mapping)
+        pcp_mapping_destroy (mapping);
+
+    pthread_mutex_unlock (&callback_lock);
+
+    puts ("mapping_changed");  // TODO: remove
+
+    free (tmp);
+    return true;
+}
+
 bool
 pcp_register_cb (pcp_callbacks *cb)
 {
@@ -718,7 +766,8 @@ pcp_register_cb (pcp_callbacks *cb)
     saved_cbs = cb;
     pthread_mutex_unlock (&callback_lock);
 
-    apteryx_watch (CONFIG_PATH "/*", cb ? pcp_config_change : NULL, NULL);
+    apteryx_watch (CONFIG_PATH "/*", cb ? pcp_config_changed : NULL, NULL);
+    apteryx_watch (MAPPING_PATH "/*", cb ? pcp_mapping_changed : NULL, NULL);
 
     return true;
 }
@@ -805,9 +854,8 @@ pcp_mapping_print (pcp_mapping mapping)
 }
 
 void
-pcp_mapping_printall (void)
+pcp_mapping_printall (GList *mappings)
 {
-    GList *mappings = pcp_mapping_getall ();
     GList *elem;
     pcp_mapping mapping = NULL;
 
@@ -816,9 +864,5 @@ pcp_mapping_printall (void)
         mapping = (pcp_mapping) elem->data;
 
         pcp_mapping_print (mapping);
-
-        pcp_mapping_destroy (mapping);
     }
-
-    g_list_free (mappings);
 }

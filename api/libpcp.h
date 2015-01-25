@@ -192,6 +192,18 @@ typedef struct _pcp_callbacks
 
     /** PREFER_FAILURE request rate limit has been changed */
     void (*prefer_failure_req_rate_limit) (u_int32_t rate);
+
+    /** New mapping has been added */
+    void (*new_pcp_mapping) (int index,
+                             u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
+                             struct in6_addr internal_ip,
+                             u_int16_t internal_port,
+                             struct in6_addr external_ip,
+                             u_int16_t external_port,
+                             u_int32_t lifetime,
+                             u_int32_t start_of_life,
+                             u_int8_t opcode,
+                             u_int8_t protocol);
 } pcp_callbacks;
 
 bool pcp_register_cb (pcp_callbacks *cb);
@@ -200,6 +212,6 @@ bool pcp_register_cb (pcp_callbacks *cb);
 void print_pcp_apteryx_config (void);
 // TODO: somehow get output into show pcp and write pcp state
 void pcp_mapping_print (pcp_mapping mapping);
-void pcp_mapping_printall (void);
+void pcp_mapping_printall (GList *mappings);
 
 #endif /* LIBPCP_H */

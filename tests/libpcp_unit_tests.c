@@ -165,7 +165,7 @@ test_pcp_mapping_destroy (void)
     pcp_mapping mapping;
 
     // Allocate some memory
-    mapping = calloc (1, sizeof (*mapping));
+    mapping = malloc (sizeof (*mapping));
     asprintf (&mapping->path, "/pcp/testpath/123");
 
     // Free it. Valgrind will fail the test if not freed properly.
@@ -406,7 +406,7 @@ test_pcp_mapping_remaining_lifetime_get (void)
     u_int32_t remaining_life;
 
     // Allocate some memory
-    mapping = calloc (1, sizeof (*mapping));
+    mapping = malloc (sizeof (*mapping));
     asprintf (&mapping->path, "/pcp/testpath/123");
 
     // Set lifetime variables
