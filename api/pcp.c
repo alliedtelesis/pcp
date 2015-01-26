@@ -707,7 +707,6 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
     char *tmp = NULL;
     int mapping_id = -1;
     pcp_mapping mapping;
-    bool index_path_changed = true;
 
     /* check we are in the right place */
     if (strncmp (path, MAPPING_PATH "/", strlen (MAPPING_PATH "/")) != 0)
@@ -720,8 +719,6 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
 
     if (strchr (tmp, '/'))
     {
-        // Another slash found means it was not the mapping's root index path that was changed
-        index_path_changed = false;
         *strrchr (tmp, '/') = '\0';
     }
     if (sscanf (tmp, "%d", &mapping_id) != 1)
@@ -731,14 +728,14 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
     }
     mapping = pcp_mapping_find (mapping_id);
     pthread_mutex_lock (&callback_lock);
-    if (index_path_changed && !mapping)
+    if (!mapping)
     {
         if (saved_cbs && saved_cbs->delete_pcp_mapping)
         {
             saved_cbs->delete_pcp_mapping (mapping_id);
         }
     }
-    else if (index_path_changed)
+    else
     {
         if (saved_cbs && saved_cbs->new_pcp_mapping)
         {
@@ -772,7 +769,7 @@ pcp_register_cb (pcp_callbacks *cb)
     pthread_mutex_unlock (&callback_lock);
 
     apteryx_watch (CONFIG_PATH "/*", cb ? pcp_config_changed : NULL, NULL);
-    apteryx_watch (MAPPING_PATH "/*", cb ? pcp_mapping_changed : NULL, NULL);
+    apteryx_watch (MAPPING_PATH "/", cb ? pcp_mapping_changed : NULL, NULL);
 
     return true;
 }
