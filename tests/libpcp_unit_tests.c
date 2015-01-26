@@ -9,6 +9,10 @@
 /* Give apteryx time to start or close */
 #define WAIT_TIME 150 * 1000
 
+/* Declare apteryx watch callback functions for testing */
+bool pcp_config_changed (const char *path, void *priv, const unsigned char *value, size_t len);
+bool pcp_mapping_changed (const char *path, void *priv, const unsigned char *value, size_t len);
+
 int
 set_up (void)
 {
@@ -421,6 +425,76 @@ test_pcp_mapping_remaining_lifetime_get (void)
     NP_ASSERT_EQUAL (remaining_life, lifetime - time_alive);
 
     pcp_mapping_destroy (mapping);
+}
+
+/* Test the path processing in the pcp_config_changed function works correctly */
+void
+test_pcp_config_changed_valid (void)
+{
+    // Test valid keys
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/pcp_initialized", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/pcp_enabled", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/map_support", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/peer_support", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/third_party_support", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/proxy_support", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/upnp_igd_pcp_iwf_support", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/min_mapping_lifetime", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/max_mapping_lifetime", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/prefer_failure_req_rate_limit", NULL, NULL, 0));
+}
+
+void
+test_pcp_config_changed_invalid (void)
+{
+    // Test invalid keys
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/config/notakey", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/config/p", NULL, NULL, 0));
+
+    // Test no keys
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/config/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/config", NULL, NULL, 0));
+
+    // Test invalid paths
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/confi", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/pcp", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/cpc", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed (NULL, NULL, NULL, 0));
+}
+
+/* Test the path processing in the pcp_mapping_changed function works correctly */
+void
+test_pcp_mapping_changed_valid (void)
+{
+    // Test valid paths with integer keys
+    NP_ASSERT_TRUE (pcp_mapping_changed ("/pcp/mappings/1", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_mapping_changed ("/pcp/mappings/1/", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_mapping_changed ("/pcp/mappings/32767", NULL, NULL, 0));
+    NP_ASSERT_TRUE (pcp_mapping_changed ("/pcp/mappings/32767/", NULL, NULL, 0));
+}
+
+void
+test_pcp_mapping_changed_invalid (void)
+{
+    // Test non-integer keys
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mappings/test", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mappings/a", NULL, NULL, 0));
+
+    // Test no keys
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mappings/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mappings", NULL, NULL, 0));
+
+    // Test invalid paths
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mapping", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/cpc", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("/", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed (NULL, NULL, NULL, 0));
 }
 
 int

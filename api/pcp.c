@@ -21,7 +21,7 @@
 
 
 #ifndef MAXIMUM_MAPPING_ID
-#define MAXIMUM_MAPPING_ID 65535
+#define MAXIMUM_MAPPING_ID INT_MAX
 #endif
 
 #define ROOT_PATH "/pcp"
@@ -611,85 +611,88 @@ config_set_default (void)
  * Watches
  *************************/
 
-static bool
+bool
 pcp_config_changed (const char *path, void *priv, const unsigned char *value,
                          size_t len)
 {
     const char *key = NULL;
 
     /* check we are in the right place */
-    if (strncmp (path, CONFIG_PATH, strlen (CONFIG_PATH)) != 0)
+    if (!path || strncmp (path, CONFIG_PATH "/", strlen (CONFIG_PATH "/")) != 0)
         return false;
 
-    key = path + strlen (CONFIG_PATH);
+    key = path + strlen (CONFIG_PATH "/");
 
     pthread_mutex_lock (&callback_lock);
 
-    /* skip the '/' character */
-    key++;
-
     if (strcmp (key, PCP_ENABLED_KEY) == 0)
     {
-        if (saved_cbs->pcp_enabled)
+        if (saved_cbs && saved_cbs->pcp_enabled)
         {
             saved_cbs->pcp_enabled (pcp_enabled_get ());
         }
     }
     else if (strcmp (key, MAP_SUPPORT_KEY) == 0)
     {
-        if (saved_cbs->map_support)
+        if (saved_cbs && saved_cbs->map_support)
         {
             saved_cbs->map_support (map_support_get ());
         }
     }
     else if (strcmp (key, PEER_SUPPORT_KEY) == 0)
     {
-        if (saved_cbs->peer_support)
+        if (saved_cbs && saved_cbs->peer_support)
         {
             saved_cbs->peer_support (peer_support_get ());
         }
     }
     else if (strcmp (key, THIRD_PARTY_SUPPORT_KEY) == 0)
     {
-        if (saved_cbs->third_party_support)
+        if (saved_cbs && saved_cbs->third_party_support)
         {
             saved_cbs->third_party_support (third_party_support_get ());
         }
     }
     else if (strcmp (key, PROXY_SUPPORT_KEY) == 0)
     {
-        if (saved_cbs->proxy_support)
+        if (saved_cbs && saved_cbs->proxy_support)
         {
             saved_cbs->proxy_support (proxy_support_get ());
         }
     }
     else if (strcmp (key, UPNP_IGD_PCP_IWF_SUPPORT_KEY) == 0)
     {
-        if (saved_cbs->upnp_igd_pcp_iwf_support)
+        if (saved_cbs && saved_cbs->upnp_igd_pcp_iwf_support)
         {
             saved_cbs->upnp_igd_pcp_iwf_support (upnp_igd_pcp_iwf_support_get ());
         }
     }
     else if (strcmp (key, MIN_MAPPING_LIFETIME_KEY) == 0)
     {
-        if (saved_cbs->min_mapping_lifetime)
+        if (saved_cbs && saved_cbs->min_mapping_lifetime)
         {
             saved_cbs->min_mapping_lifetime (min_mapping_lifetime_get ());
         }
     }
     else if (strcmp (key, MAX_MAPPING_LIFETIME_KEY) == 0)
     {
-        if (saved_cbs->max_mapping_lifetime)
+        if (saved_cbs && saved_cbs->max_mapping_lifetime)
         {
             saved_cbs->max_mapping_lifetime (max_mapping_lifetime_get ());
         }
     }
     else if (strcmp (key, PREFER_FAILURE_REQ_RATE_LIMIT_KEY) == 0)
     {
-        if (saved_cbs->prefer_failure_req_rate_limit)
+        if (saved_cbs && saved_cbs->prefer_failure_req_rate_limit)
         {
             saved_cbs->prefer_failure_req_rate_limit (prefer_failure_req_rate_limit_get ());
         }
+    }
+    else if (strcmp (key, PCP_INITIALIZED_KEY) != 0)
+    {
+        // key does not match any known keys
+        pthread_mutex_unlock (&callback_lock);
+        return false;
     }
 
     pthread_mutex_unlock (&callback_lock);
@@ -699,17 +702,16 @@ pcp_config_changed (const char *path, void *priv, const unsigned char *value,
     return true;
 }
 
-static bool
+bool
 pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
                    size_t len)
 {
-    puts(path);
     char *tmp = NULL;
     int mapping_id = -1;
     pcp_mapping mapping;
 
     /* check we are in the right place */
-    if (strncmp (path, MAPPING_PATH "/", strlen (MAPPING_PATH "/")) != 0)
+    if (!path || strncmp (path, MAPPING_PATH "/", strlen (MAPPING_PATH "/")) != 0)
         return false;
 
     /* Parse the rule ID and key */
