@@ -204,6 +204,9 @@ typedef struct _pcp_callbacks
                              u_int32_t start_of_life,
                              u_int8_t opcode,
                              u_int8_t protocol);
+
+    /** A mapping has been deleted */
+    void (*delete_pcp_mapping) (int index);
 } pcp_callbacks;
 
 bool pcp_register_cb (pcp_callbacks *cb);

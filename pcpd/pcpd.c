@@ -518,6 +518,43 @@ new_pcp_mapping (int index,
     mappings = g_list_insert_sorted (mappings, mapping, mapping_index_cmp);
 }
 
+static pcp_mapping
+pcp_mapping_get (int index)
+{
+    pcp_mapping temp_mapping = NULL;
+    pcp_mapping mapping = NULL;
+    GList *elem = NULL;
+
+    temp_mapping = malloc (sizeof (*temp_mapping));
+    temp_mapping->path = NULL;
+
+    temp_mapping->index = index;
+
+    elem = g_list_find_custom (mappings, temp_mapping, mapping_index_cmp);
+
+    if (elem && elem->data)
+    {
+        mapping = (pcp_mapping) elem->data;
+    }
+
+    pcp_mapping_destroy (temp_mapping);
+
+    return mapping;
+}
+
+void
+delete_pcp_mapping (int index)
+{
+    pcp_mapping mapping = pcp_mapping_get (index);
+
+    if (mapping)
+    {
+        mappings = g_list_remove (mappings, mapping);
+
+        pcp_mapping_destroy (mapping);
+    }
+}
+
 void
 run_loop (int sock, socklen_t fromlen)
 {
@@ -564,6 +601,7 @@ pcp_callbacks callbacks = {
     .max_mapping_lifetime = max_mapping_lifetime,
     .prefer_failure_req_rate_limit = prefer_failure_req_rate_limit,
     .new_pcp_mapping = new_pcp_mapping,
+    .delete_pcp_mapping = delete_pcp_mapping,
 };
 
 /**

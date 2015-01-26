@@ -729,12 +729,14 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
         free (tmp);
         return false;
     }
-
     mapping = pcp_mapping_find (mapping_id);
     pthread_mutex_lock (&callback_lock);
-    if (!mapping)
+    if (index_path_changed && !mapping)
     {
-        // TODO: Call delete mapping
+        if (saved_cbs && saved_cbs->delete_pcp_mapping)
+        {
+            saved_cbs->delete_pcp_mapping (mapping_id);
+        }
     }
     else if (index_path_changed)
     {
@@ -747,9 +749,12 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
                                         mapping->opcode, mapping->protocol);
         }
     }
+    // TODO: extend lifetime
 
     if (mapping)
+    {
         pcp_mapping_destroy (mapping);
+    }
 
     pthread_mutex_unlock (&callback_lock);
 
