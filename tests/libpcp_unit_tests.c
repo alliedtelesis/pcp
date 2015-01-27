@@ -7,17 +7,37 @@
 #include <unistd.h>
 
 /* Give apteryx time to start or close */
-#define WAIT_TIME 150 * 1000
+#define APTERYXD_WAIT_TIME 150 * 1000
+/* Give apteryx time to set value and call callback function */
+#define APTERYX_SET_WAIT_TIME 10 * 1000
 
 /* Declare apteryx watch callback functions for testing */
 bool pcp_config_changed (const char *path, void *priv, const unsigned char *value, size_t len);
 bool pcp_mapping_changed (const char *path, void *priv, const unsigned char *value, size_t len);
 
+/* Global struct to contain flags whether callbacks were successfully called or not */
+struct pcp_callback_flags
+{
+    bool pcp_enabled;
+    bool map_support;
+    bool peer_support;
+    bool third_party_support;
+    bool proxy_support;
+    bool upnp_igd_pcp_iwf_support;
+    u_int32_t min_mapping_lifetime;
+    u_int32_t max_mapping_lifetime;
+    u_int32_t prefer_failure_req_rate_limit;
+    bool new_pcp_mapping;       // TODO: Change type
+    bool delete_pcp_mapping;
+};
+
+struct pcp_callback_flags cb_flags = { 0 };
+
 int
 set_up (void)
 {
     system ("apteryxd -b");
-    usleep (WAIT_TIME);
+    usleep (APTERYXD_WAIT_TIME);
     pcp_init ();
     return 0;
 }
@@ -430,7 +450,7 @@ test_pcp_mapping_remaining_lifetime_get (void)
 
 /* Test the path processing in the pcp_config_changed function works correctly */
 void
-test_pcp_config_changed_valid (void)
+test_pcp_config_changed_valid_path (void)
 {
     // Test valid keys
     NP_ASSERT_TRUE (pcp_config_changed ("/pcp/config/pcp_initialized", NULL, NULL, 0));
@@ -446,7 +466,7 @@ test_pcp_config_changed_valid (void)
 }
 
 void
-test_pcp_config_changed_invalid (void)
+test_pcp_config_changed_invalid_path (void)
 {
     // Test invalid keys
     NP_ASSERT_FALSE (pcp_config_changed ("/pcp/config/notakey", NULL, NULL, 0));
@@ -463,12 +483,13 @@ test_pcp_config_changed_invalid (void)
     NP_ASSERT_FALSE (pcp_config_changed ("/cpc", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_config_changed ("/", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_config_changed ("", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_config_changed ("abcdefg", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_config_changed (NULL, NULL, NULL, 0));
 }
 
 /* Test the path processing in the pcp_mapping_changed function works correctly */
 void
-test_pcp_mapping_changed_valid (void)
+test_pcp_mapping_changed_valid_path (void)
 {
     // Test valid paths with integer keys
     NP_ASSERT_TRUE (pcp_mapping_changed ("/pcp/mappings/1", NULL, NULL, 0));
@@ -478,7 +499,7 @@ test_pcp_mapping_changed_valid (void)
 }
 
 void
-test_pcp_mapping_changed_invalid (void)
+test_pcp_mapping_changed_invalid_path (void)
 {
     // Test non-integer keys
     NP_ASSERT_FALSE (pcp_mapping_changed ("/pcp/mappings/test", NULL, NULL, 0));
@@ -495,14 +516,152 @@ test_pcp_mapping_changed_invalid (void)
     NP_ASSERT_FALSE (pcp_mapping_changed ("/cpc", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_mapping_changed ("/", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_mapping_changed ("", NULL, NULL, 0));
+    NP_ASSERT_FALSE (pcp_mapping_changed ("abcdefg", NULL, NULL, 0));
     NP_ASSERT_FALSE (pcp_mapping_changed (NULL, NULL, NULL, 0));
+}
+
+/* Test callback functions */
+void
+pcp_enabled (bool enabled)
+{
+    cb_flags.pcp_enabled = enabled;
+}
+
+void
+map_support (bool enabled)
+{
+    cb_flags.map_support = enabled;
+}
+
+void
+peer_support (bool enabled)
+{
+    cb_flags.peer_support = enabled;
+}
+
+void
+third_party_support (bool enabled)
+{
+    cb_flags.third_party_support = enabled;
+}
+
+void
+proxy_support (bool enabled)
+{
+    cb_flags.proxy_support = enabled;
+}
+
+void
+upnp_igd_pcp_iwf_support (bool enabled)
+{
+    cb_flags.upnp_igd_pcp_iwf_support = enabled;
+}
+
+void
+min_mapping_lifetime (u_int32_t lifetime)
+{
+    cb_flags.min_mapping_lifetime = lifetime;
+}
+
+void
+max_mapping_lifetime (u_int32_t lifetime)
+{
+    cb_flags.max_mapping_lifetime = lifetime;
+}
+
+void
+prefer_failure_req_rate_limit (u_int32_t rate)
+{
+    cb_flags.prefer_failure_req_rate_limit = rate;
+}
+
+void
+new_pcp_mapping (int index,
+                 u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
+                 struct in6_addr internal_ip,
+                 u_int16_t internal_port,
+                 struct in6_addr external_ip,
+                 u_int16_t external_port,
+                 u_int32_t lifetime,
+                 u_int32_t start_of_life,
+                 u_int32_t end_of_life,
+                 u_int8_t opcode,
+                 u_int8_t protocol)
+{
+    cb_flags.new_pcp_mapping = true;
+}
+
+void
+delete_pcp_mapping (int index)
+{
+    cb_flags.delete_pcp_mapping = true;
+}
+
+/* A struct that contains function pointers for handling each of the possible callbacks */
+pcp_callbacks callbacks = {
+    .pcp_enabled = pcp_enabled,
+    .map_support = map_support,
+    .peer_support = peer_support,
+    .third_party_support = third_party_support,
+    .proxy_support = proxy_support,
+    .upnp_igd_pcp_iwf_support = upnp_igd_pcp_iwf_support,
+    .min_mapping_lifetime = min_mapping_lifetime,
+    .max_mapping_lifetime = max_mapping_lifetime,
+    .prefer_failure_req_rate_limit = prefer_failure_req_rate_limit,
+    .new_pcp_mapping = new_pcp_mapping,
+    .delete_pcp_mapping = delete_pcp_mapping,
+};
+
+/* Test the pcp config callbacks. Note that the memory leaks caused by apteryx_watch
+ * when creating pthreads are false alarms and are not an issue. */
+void
+test_pcp_config_changed_callback (void)
+{
+    NP_ASSERT_TRUE (pcp_register_cb (&callbacks));
+
+    NP_ASSERT_TRUE (pcp_enabled_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.pcp_enabled);
+
+    NP_ASSERT_TRUE (map_support_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.map_support);
+
+    NP_ASSERT_TRUE (peer_support_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.peer_support);
+
+    NP_ASSERT_TRUE (third_party_support_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.third_party_support);
+
+    NP_ASSERT_TRUE (proxy_support_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.proxy_support);
+
+    NP_ASSERT_TRUE (upnp_igd_pcp_iwf_support_set (true));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_TRUE (cb_flags.upnp_igd_pcp_iwf_support);
+
+    NP_ASSERT_TRUE (min_mapping_lifetime_set (500));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.min_mapping_lifetime, 500);
+
+    NP_ASSERT_TRUE (max_mapping_lifetime_set (600));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.max_mapping_lifetime, 600);
+
+    NP_ASSERT_TRUE (prefer_failure_req_rate_limit_set (400));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.prefer_failure_req_rate_limit, 400);
 }
 
 int
 tear_down (void)
 {
+    pcp_register_cb (NULL);
     pcp_deinit_hard ();
     system ("pkill apteryxd");
-    usleep (WAIT_TIME);
+    usleep (APTERYXD_WAIT_TIME);
     return 0;
 }
