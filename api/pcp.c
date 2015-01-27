@@ -54,8 +54,6 @@
 #define MAX_MAPPING_LIFETIME_KEY "max_mapping_lifetime"
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
 
-#define CHECK_NOT_NULL(s_ptr, val, ret_null) s_ptr ? s_ptr->val : ret_null
-
 static pcp_callbacks *saved_cbs = NULL;
 static pthread_mutex_t callback_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -303,66 +301,6 @@ pcp_mapping_getall (void)
     return mappings;
 }
 
-int
-pcp_mapping_id_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, index, -1);
-}
-
-u_int32_t
-pcp_mapping_mapping_nonce_1_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, mapping_nonce[0], 0);
-}
-
-u_int32_t
-pcp_mapping_mapping_nonce_2_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, mapping_nonce[1], 0);
-}
-
-u_int32_t
-pcp_mapping_mapping_nonce_3_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, mapping_nonce[2], 0);
-}
-
-struct in6_addr
-pcp_mapping_internal_ip_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, internal_ip, (struct in6_addr) {{{ 0 }}});
-}
-
-u_int16_t
-pcp_mapping_internal_port_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, internal_port, 0);
-}
-
-struct in6_addr
-pcp_mapping_external_ip_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, external_ip, (struct in6_addr) {{{ 0 }}});
-}
-
-u_int16_t
-pcp_mapping_external_port_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, external_port, 0);
-}
-
-u_int32_t
-pcp_mapping_lifetime_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, lifetime, 0);
-}
-
-u_int32_t
-pcp_mapping_start_of_life_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, start_of_life, 0);
-}
-
 u_int32_t
 pcp_mapping_remaining_lifetime_get (pcp_mapping mapping)
 {
@@ -380,18 +318,6 @@ pcp_mapping_remaining_lifetime_get (pcp_mapping mapping)
         lifetime_remaining = mapping->lifetime - time_alive;
 
     return lifetime_remaining;
-}
-
-u_int8_t
-pcp_mapping_opcode_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, opcode, 0);
-}
-
-u_int8_t
-pcp_mapping_protocol_get (pcp_mapping mapping)
-{
-    return CHECK_NOT_NULL (mapping, protocol, 0);
 }
 
 void
