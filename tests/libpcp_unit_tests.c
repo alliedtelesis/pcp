@@ -399,14 +399,14 @@ test_pcp_mapping_getall (void)
 }
 
 /* Test the remaining lifetime get function. Test may fail if time goes to the next
- * second in between the start_of_life assignment and remaining lifetime calculation. */
+ * second in between the end_of_life assignment and remaining lifetime calculation. */
 void
 test_pcp_mapping_remaining_lifetime_get (void)
 {
     pcp_mapping mapping;
     u_int32_t lifetime;
     u_int32_t time_alive;
-    u_int32_t start_of_life;
+    u_int32_t end_of_life;
     u_int32_t remaining_life;
 
     // Allocate some memory
@@ -416,9 +416,10 @@ test_pcp_mapping_remaining_lifetime_get (void)
     // Set lifetime variables
     lifetime = 4000;
     time_alive = 1000;
-    start_of_life = time (NULL) - time_alive;
+    end_of_life = time (NULL) + lifetime - time_alive;
+
     mapping->lifetime = lifetime;
-    mapping->start_of_life = start_of_life;
+    mapping->end_of_life = end_of_life;
 
     // Calculate remaining lifetime and compare
     remaining_life = pcp_mapping_remaining_lifetime_get (mapping);

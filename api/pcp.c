@@ -38,6 +38,7 @@
 #define EXTERNAL_PORT_KEY "external_port"
 #define LIFETIME_KEY "lifetime"
 #define START_OF_LIFE_KEY "start_of_life"
+#define END_OF_LIFE_KEY "end_of_life"
 #define OPCODE_KEY "opcode"
 #define PROTOCOL_KEY "protocol"
 
@@ -207,6 +208,7 @@ pcp_mapping_add (int index,
     apteryx_set_int (path, EXTERNAL_PORT_KEY, external_port);
     apteryx_set_int (path, LIFETIME_KEY, lifetime);
     apteryx_set_int (path, START_OF_LIFE_KEY, time (NULL));
+    apteryx_set_int (path, END_OF_LIFE_KEY, time (NULL) + lifetime);
     apteryx_set_int (path, OPCODE_KEY, opcode);
     apteryx_set_int (path, PROTOCOL_KEY, protocol);
     apteryx_set_string (path, NULL, "-");
@@ -261,6 +263,7 @@ pcp_mapping_find (int mapping_id)
     mapping->external_port = apteryx_get_int (mapping->path, EXTERNAL_PORT_KEY);
     mapping->lifetime = apteryx_get_int (mapping->path, LIFETIME_KEY);
     mapping->start_of_life = apteryx_get_int (mapping->path, START_OF_LIFE_KEY);
+    mapping->end_of_life = apteryx_get_int (mapping->path, END_OF_LIFE_KEY);
     mapping->opcode = apteryx_get_int (mapping->path, OPCODE_KEY);
     mapping->protocol = apteryx_get_int (mapping->path, PROTOCOL_KEY);
 
@@ -304,20 +307,12 @@ pcp_mapping_getall (void)
 u_int32_t
 pcp_mapping_remaining_lifetime_get (pcp_mapping mapping)
 {
-    u_int32_t time_alive;
-    u_int32_t lifetime_remaining;
-
-    if (!mapping)
+    u_int32_t now = time (NULL);
+    if (!mapping || mapping->end_of_life <= now)
+    {
         return 0;
-
-    time_alive = time (NULL) - mapping->start_of_life;
-
-    if (time_alive > mapping->lifetime)
-        lifetime_remaining = 0;
-    else
-        lifetime_remaining = mapping->lifetime - time_alive;
-
-    return lifetime_remaining;
+    }
+    return mapping->end_of_life - now;
 }
 
 void
@@ -671,7 +666,8 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
                                         mapping->internal_ip, mapping->internal_port,
                                         mapping->external_ip, mapping->external_port,
                                         mapping->lifetime, mapping->start_of_life,
-                                        mapping->opcode, mapping->protocol);
+                                        mapping->end_of_life, mapping->opcode,
+                                        mapping->protocol);
         }
     }
     // TODO: extend lifetime
@@ -753,6 +749,7 @@ pcp_mapping_print (pcp_mapping mapping)
                 "       %-19.18s: %u\n"
                 "         To remove later\n" // TODO: Remove later
                 "         %-17.16s: %s\n"
+                "         %-17.16s: %u\n"
                 "         %-17.16s: %u\n\n",
                 (mapping->opcode == MAP_OPCODE) ? "MAP mapping ID" : "PEER mapping ID",
                 mapping->index,
@@ -775,7 +772,9 @@ pcp_mapping_print (pcp_mapping mapping)
                 "Path",  // TODO: Remove later
                 mapping->path,
                 "Start of life",
-                mapping->start_of_life);
+                mapping->start_of_life,
+                "End of life",
+                mapping->end_of_life);
     }
     else
     {

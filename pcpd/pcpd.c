@@ -495,6 +495,7 @@ new_pcp_mapping (int index,
                  u_int16_t external_port,
                  u_int32_t lifetime,
                  u_int32_t start_of_life,
+                 u_int32_t end_of_life,
                  u_int8_t opcode,
                  u_int8_t protocol)
 {
@@ -512,6 +513,7 @@ new_pcp_mapping (int index,
     mapping->external_port = external_port;
     mapping->lifetime = lifetime;
     mapping->start_of_life = start_of_life;
+    mapping->end_of_life = end_of_life;
     mapping->opcode = opcode;
     mapping->protocol = protocol;
 

@@ -43,7 +43,8 @@ struct pcp_mapping_s
     struct in6_addr external_ip;
     u_int16_t external_port;
     u_int32_t lifetime;         // assigned_lifetime
-    u_int32_t start_of_life;    // call time (NULL) at start
+    u_int32_t start_of_life;    // call time (NULL) at start and kept constant
+    u_int32_t end_of_life;      // call time (NULL) + lifetime at start and update
     u_int8_t opcode;            // MAP or PEER opcode
     u_int8_t protocol;
 };
@@ -178,6 +179,7 @@ typedef struct _pcp_callbacks
                              u_int16_t external_port,
                              u_int32_t lifetime,
                              u_int32_t start_of_life,
+                             u_int32_t end_of_life,
                              u_int8_t opcode,
                              u_int8_t protocol);
 
