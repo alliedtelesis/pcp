@@ -27,8 +27,9 @@ struct pcp_callback_flags
     u_int32_t min_mapping_lifetime;
     u_int32_t max_mapping_lifetime;
     u_int32_t prefer_failure_req_rate_limit;
-    bool new_pcp_mapping;       // TODO: Change type
-    bool delete_pcp_mapping;
+    int new_pcp_mapping;        // Number of times new mapping is called
+    int delete_pcp_mapping;     // Number of times delete mapping is called
+    int mapping_count;          // Count of current mappings
 };
 
 struct pcp_callback_flags cb_flags = { 0 };
@@ -588,13 +589,15 @@ new_pcp_mapping (int index,
                  u_int8_t opcode,
                  u_int8_t protocol)
 {
-    cb_flags.new_pcp_mapping = true;
+    cb_flags.new_pcp_mapping++;
+    cb_flags.mapping_count++;
 }
 
 void
 delete_pcp_mapping (int index)
 {
-    cb_flags.delete_pcp_mapping = true;
+    cb_flags.delete_pcp_mapping++;
+    cb_flags.mapping_count--;
 }
 
 /* A struct that contains function pointers for handling each of the possible callbacks */
@@ -654,6 +657,159 @@ test_pcp_config_changed_callback (void)
     NP_ASSERT_TRUE (prefer_failure_req_rate_limit_set (400));
     usleep (APTERYX_SET_WAIT_TIME);
     NP_ASSERT_EQUAL (cb_flags.prefer_failure_req_rate_limit, 400);
+}
+
+static void
+compare_mapping_counts (void)
+{
+    GList *apteryx_mappings = pcp_mapping_getall ();
+    int apteryx_mapping_count = (int) g_list_length (apteryx_mappings);
+
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, apteryx_mapping_count);
+
+    g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+}
+
+/* Test the pcp mapping callbacks. Note that the memory leaks caused by apteryx_watch
+ * when creating pthreads are false alarms and are not an issue. */
+void
+test_pcp_mapping_changed_callback (void)
+{
+    NP_ASSERT_TRUE (pcp_register_cb (&callbacks));
+
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = { 0 };
+    struct in6_addr internal_ip = {{{ 0 }}};
+    struct in6_addr external_ip = {{{ 0 }}};
+
+    NP_ASSERT_TRUE (pcp_mapping_add (50, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 1);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_add (100, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 2);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 2);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_add (150, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 3);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 3);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_delete (100));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 2);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_add (200, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 4);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 3);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_delete (50));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 2);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 2);
+    compare_mapping_counts ();
+}
+
+/* Test the pcp mapping callbacks when adding multiple mappings of the same index. */
+void
+test_pcp_mapping_changed_callback_add_duplicate (void)
+{
+    NP_ASSERT_TRUE (pcp_register_cb (&callbacks));
+
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = { 0 };
+    struct in6_addr internal_ip = {{{ 0 }}};
+    struct in6_addr external_ip = {{{ 0 }}};
+
+    NP_ASSERT_TRUE (pcp_mapping_add (50, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 1);
+    compare_mapping_counts ();
+
+    NP_ASSERT_FALSE (pcp_mapping_add (50, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 1);
+    compare_mapping_counts ();
+
+    NP_ASSERT_FALSE (pcp_mapping_add (50, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 1);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_delete (50));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+}
+
+/* Test the pcp mapping callbacks when deleting a mapping of the same index
+ * multiple times. */
+void
+test_pcp_mapping_changed_callback_delete_duplicate (void)
+{
+    NP_ASSERT_TRUE (pcp_register_cb (&callbacks));
+
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 0);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+
+    u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = { 0 };
+    struct in6_addr internal_ip = {{{ 0 }}};
+    struct in6_addr external_ip = {{{ 0 }}};
+
+    NP_ASSERT_TRUE (pcp_mapping_add (100, mapping_nonce, &internal_ip, 0,
+                                     &external_ip, 0, 0, 0, 0));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.new_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 1);
+    compare_mapping_counts ();
+
+    NP_ASSERT_TRUE (pcp_mapping_delete (100));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+
+    NP_ASSERT_FALSE (pcp_mapping_delete (100));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
+
+    NP_ASSERT_FALSE (pcp_mapping_delete (100));
+    usleep (APTERYX_SET_WAIT_TIME);
+    NP_ASSERT_EQUAL (cb_flags.delete_pcp_mapping, 1);
+    NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
+    compare_mapping_counts ();
 }
 
 int

@@ -190,7 +190,13 @@ pcp_mapping_add (int index,
 
 
     /* Make sure the specified mapping index is not in use */
-    /* TODO: Try find the index, if found then return error */
+    pcp_mapping mapping = pcp_mapping_find (index);
+    if (mapping)
+    {
+        /* already exists */
+        pcp_mapping_destroy (mapping);
+        return false;
+    }
 
 
     if (asprintf (&path, MAPPING_PATH "/%d", index) == 0)
@@ -222,6 +228,15 @@ bool
 pcp_mapping_delete (int index)
 {
     char *tmp;
+    pcp_mapping mapping;
+
+    /* Make sure the specified mapping index exists */
+    mapping = pcp_mapping_find (index);
+    if (!mapping)
+        return false;
+
+    pcp_mapping_destroy (mapping);
+
     if (asprintf (&tmp, MAPPING_PATH "/%d", index) > 0)
     {
         apteryx_prune (tmp);
@@ -249,7 +264,8 @@ pcp_mapping_find (int mapping_id)
     if (asprintf (&mapping->path, MAPPING_PATH "/%d", mapping_id) == 0 ||
         (tmp = apteryx_get_string (mapping->path, NULL)) == NULL)
     {
-        goto error;
+        pcp_mapping_destroy (mapping);
+        return NULL;
     }
     free (tmp);
 
@@ -268,11 +284,6 @@ pcp_mapping_find (int mapping_id)
     mapping->protocol = apteryx_get_int (mapping->path, PROTOCOL_KEY);
 
     return mapping;
-
-  error:
-    pcp_mapping_destroy (mapping);
-    perror ("error finding mapping");
-    return NULL;
 }
 
 static int
