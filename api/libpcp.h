@@ -76,6 +76,8 @@ pcp_mapping_add (int index,
                  u_int8_t opcode,
                  u_int8_t protocol);
 
+bool pcp_mapping_refresh_lifetime (int index, u_int32_t new_end_of_life);
+
 bool pcp_mapping_delete (int index);
 
 bool pcp_mapping_deleteall (void);

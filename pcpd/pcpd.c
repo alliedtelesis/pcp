@@ -339,6 +339,53 @@ setup_pcpd (void)
     return sock;
 }
 
+static bool
+compare_mapping_nonces (u_int32_t nonce1[MAPPING_NONCE_SIZE],
+                        u_int32_t nonce2[MAPPING_NONCE_SIZE])
+{
+    int i;
+    for (i = 0; i < MAPPING_NONCE_SIZE; i++)
+    {
+        if (nonce1[i] != nonce2[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool
+compare_ipv6_addresses (struct in6_addr *ip1, struct in6_addr *ip2)
+{
+    return memcmp (ip1, ip2, sizeof (struct in6_addr)) == 0;
+}
+
+static bool
+compare_map_request_to_mapping (map_request *map_req, pcp_mapping mapping)
+{
+    return compare_mapping_nonces (map_req->mapping_nonce, mapping->mapping_nonce) &&
+            compare_ipv6_addresses (&(map_req->header.client_ip), &(mapping->internal_ip)) &&
+            map_req->internal_port == mapping->internal_port &&
+            map_req->protocol == mapping->protocol;
+}
+
+pcp_mapping
+find_mapping_by_request (map_request *map_req)
+{
+    GList *elem;
+    pcp_mapping mapping = NULL;
+
+    for (elem = mappings; elem; elem = elem->next)
+    {
+        mapping = (pcp_mapping) elem->data;
+        if (compare_map_request_to_mapping (map_req, mapping))
+        {
+            return mapping;
+        }
+    }
+    return NULL;
+}
+
 /**
  * @brief process_map_request - Process a MAP request and create MAP response
  * @param pkt_buf - Serialized MAP request buffer
@@ -356,6 +403,8 @@ process_map_request (unsigned char *pkt_buf)
     char *assigned_ext_ip_str;
     struct in6_addr assigned_ext_ip;
     result_code result;
+    int mapping_index;
+    u_int32_t new_end_of_life;
 
     map_req = deserialize_map_request (pkt_buf);
 
@@ -379,10 +428,29 @@ process_map_request (unsigned char *pkt_buf)
     }
     //result = NOT_AUTHORIZED;
 
-    if (result == SUCCESS)
+    pcp_mapping mapping = find_mapping_by_request (map_req);
+    if (mapping)
     {
-        int index = -1;     // Next highest index
-        pcp_mapping_add (index,
+        puts("MAPPING EXISTS");
+        new_end_of_life = time (NULL) + mapping->lifetime;
+        pcp_mapping_refresh_lifetime (mapping->index, new_end_of_life);
+        mapping->end_of_life = new_end_of_life;
+
+        //TODO: remove below
+        puts("\n printing all mappings from apteryx");
+        GList *apteryx_mappings = pcp_mapping_getall ();
+        pcp_mapping_printall (apteryx_mappings);
+        g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+        puts(" end printing all mappings from apteryx\n");
+
+        puts("\n printing all mappings from local list");
+        pcp_mapping_printall (mappings);
+        puts(" end printing all mappings from local list\n");
+    }
+    else if (result == SUCCESS)
+    {
+        mapping_index = -1;     // Next highest index
+        pcp_mapping_add (mapping_index,
                          map_req->mapping_nonce,
                          &(map_req->header.client_ip),
                          map_req->internal_port,
@@ -392,6 +460,7 @@ process_map_request (unsigned char *pkt_buf)
                          MAP_OPCODE,
                          map_req->protocol);
 
+        //TODO: remove below
         puts("\n printing all mappings from apteryx");
         GList *apteryx_mappings = pcp_mapping_getall ();
         pcp_mapping_printall (apteryx_mappings);
