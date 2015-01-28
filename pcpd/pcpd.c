@@ -611,10 +611,18 @@ check_mapping_lifetimes (void *arg)
 {
     GList *elem;
     pcp_mapping mapping = NULL;
+    bool deleted = false;   // TODO: remove
+    int count = 0;          // TODO: remove
 
     while (1)
     {
-        // TODO: Lock this for loop - possibly two locks
+        /* When an expired mapping is found, the delete function from libpcp is called
+         * which changes the value stored in apteryx. This prompts the local function
+         * delete_pcp_mapping to be called but it will block since the mapping lock
+         * is in place. This causes all of the delete_pcp_mapping calls to queue
+         * up in a separate thread and execute after this loop is complete. */
+        pthread_mutex_lock (&mapping_lock);
+
         for (elem = mappings; elem; elem = elem->next)
         {
             mapping = (pcp_mapping) elem->data;
@@ -623,20 +631,33 @@ check_mapping_lifetimes (void *arg)
             {
                 pcp_mapping_delete (mapping->index);
 
-                // TODO: Remove below
-                usleep (10 * 1000);
-                printf ("mapping deleted at %u - printing now\n", (u_int32_t) time (NULL));
-
-                puts("\n printing all mappings from apteryx");
-                GList *apteryx_mappings = pcp_mapping_getall ();
-                pcp_mapping_printall (apteryx_mappings);
-                g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
-                puts(" end printing all mappings from apteryx\n");
-
-                puts("\n printing all mappings from local list");
-                pcp_mapping_printall (mappings);
-                puts(" end printing all mappings from local list\n");
+                deleted = true; // TODO: remove
+                count++;        // TODO: remove
             }
+        }
+
+        pthread_mutex_unlock (&mapping_lock);
+
+        // TODO: Remove if statement, the deleted flag and count
+        if (deleted)
+        {
+            usleep (25 * 1000); // Give apteryx and callbacks time to run
+            printf ("%d mappings deleted at %u - printing now\n", count, (u_int32_t) time (NULL));
+
+            puts("\n printing all mappings from apteryx");
+            GList *apteryx_mappings = pcp_mapping_getall ();
+            pcp_mapping_printall (apteryx_mappings);
+            g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+            puts(" end printing all mappings from apteryx\n");
+
+            pthread_mutex_lock (&mapping_lock);
+            puts("\n printing all mappings from local list");
+            pcp_mapping_printall (mappings);
+            puts(" end printing all mappings from local list\n");
+            pthread_mutex_unlock (&mapping_lock);
+
+            deleted = false;
+            count = 0;
         }
         sleep (1);
     }
