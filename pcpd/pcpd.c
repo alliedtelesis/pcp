@@ -5,6 +5,7 @@
 #include <getopt.h>
 #include <glib.h>
 #include <netdb.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -57,6 +58,10 @@ pcp_config config;
 
 /* Global list of all current mappings */
 GList *mappings = NULL;
+
+/* Thread variables */
+pthread_t mapping_thread;
+static pthread_mutex_t mapping_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
 /**
@@ -232,6 +237,7 @@ signal_handler (int signal)
     }
     if (signal == SIGINT || signal == SIGTERM)
     {
+        pthread_cancel (mapping_thread);
         pcp_register_cb (NULL);
         g_list_free_full (mappings, (GDestroyNotify) pcp_mapping_destroy);
         pcp_deinit ();
@@ -362,7 +368,8 @@ process_map_request (unsigned char *pkt_buf)
      * - Set result_code based on result
      * Below are temporary values for these variables
      */
-    lifetime = 9001;    // Lifetime of mapping or expected lifetime of resulting error
+//    lifetime = 9001;    // Lifetime of mapping or expected lifetime of resulting error
+    lifetime = 10;      // Short lifetime to test the lifetime check thread
     assigned_ext_port = 4321;
     assigned_ext_ip_str = "80fe::2020:ff3b:2eef:3829";
     if (!inet_pton (AF_INET6, assigned_ext_ip_str, &assigned_ext_ip))
@@ -517,7 +524,11 @@ new_pcp_mapping (int index,
     mapping->opcode = opcode;
     mapping->protocol = protocol;
 
+    pthread_mutex_lock (&mapping_lock);
+
     mappings = g_list_insert_sorted (mappings, mapping, mapping_index_cmp);
+
+    pthread_mutex_unlock (&mapping_lock);
 }
 
 static pcp_mapping
@@ -547,6 +558,8 @@ pcp_mapping_get (int index)
 void
 delete_pcp_mapping (int index)
 {
+    pthread_mutex_lock (&mapping_lock);
+
     pcp_mapping mapping = pcp_mapping_get (index);
 
     if (mapping)
@@ -555,6 +568,8 @@ delete_pcp_mapping (int index)
 
         pcp_mapping_destroy (mapping);
     }
+
+    pthread_mutex_unlock (&mapping_lock);
 }
 
 void
@@ -589,6 +604,44 @@ run_loop (int sock, socklen_t fromlen)
                     fromlen);
         check_error (n, "sendto");
     }
+}
+
+void *
+check_mapping_lifetimes (void *arg)
+{
+    GList *elem;
+    pcp_mapping mapping = NULL;
+
+    while (1)
+    {
+        // TODO: Lock this for loop - possibly two locks
+        for (elem = mappings; elem; elem = elem->next)
+        {
+            mapping = (pcp_mapping) elem->data;
+
+            if (pcp_mapping_remaining_lifetime_get (mapping) == 0)
+            {
+                pcp_mapping_delete (mapping->index);
+
+                // TODO: Remove below
+                usleep (10 * 1000);
+                printf ("mapping deleted at %u - printing now\n", (u_int32_t) time (NULL));
+
+                puts("\n printing all mappings from apteryx");
+                GList *apteryx_mappings = pcp_mapping_getall ();
+                pcp_mapping_printall (apteryx_mappings);
+                g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+                puts(" end printing all mappings from apteryx\n");
+
+                puts("\n printing all mappings from local list");
+                pcp_mapping_printall (mappings);
+                puts(" end printing all mappings from local list\n");
+            }
+        }
+        sleep (1);
+    }
+
+    return NULL;
 }
 
 /** A struct that contains function pointers for handling each of the possible callbacks */
@@ -634,12 +687,20 @@ main (int argc, char *argv[])
 
     write_pcp_state (&config);
 
+    if (pthread_create (&mapping_thread, NULL, &check_mapping_lifetimes, NULL) != 0)
+    {
+        syslog (LOG_ERR, "Failed to create mapping lifetime check thread\n");
+    }
+    if (pthread_detach (mapping_thread) != 0)
+    {
+        syslog (LOG_ERR, "Failed to detach thread\n");
+    }
+
     fromlen = sizeof (struct sockaddr_in);
 
     while (1)
     {
         run_loop (sock, fromlen);
-
     }
     return EXIT_SUCCESS;
 }
