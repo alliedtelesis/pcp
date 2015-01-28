@@ -24,6 +24,10 @@
 #define MAXIMUM_MAPPING_ID INT_MAX
 #endif
 
+/* ctime strings are exactly 26 characters with the format
+ * "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n" */
+#define CTIME_BUF_SIZE 32
+
 #define ROOT_PATH "/pcp"
 
 /* mapping keys */
@@ -747,9 +751,17 @@ pcp_mapping_print (pcp_mapping mapping)
     {
         char internal_ip_str[INET6_ADDRSTRLEN];
         char external_ip_str[INET6_ADDRSTRLEN];
+        char start_of_life_str[CTIME_BUF_SIZE];
+        char end_of_life_str[CTIME_BUF_SIZE];
 
-        inet_ntop(AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
-        inet_ntop(AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
+        time_t start_of_life = (time_t) mapping->start_of_life;
+        time_t end_of_life = (time_t) mapping->end_of_life;
+
+        ctime_r (&start_of_life, start_of_life_str);
+        ctime_r (&end_of_life, end_of_life_str);
+
+        inet_ntop (AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
+        inet_ntop (AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
 
         printf ("     %-21.20s: %d\n"
                 "       %-19.18s: %10u %10u %10u\n"
@@ -757,6 +769,8 @@ pcp_mapping_print (pcp_mapping mapping)
                 "       %-19.18s: [%s]:%u\n"
                 "       %-19.18s: %u\n"
                 "       %-19.18s: %u\n"
+                "       %-19.18s: %s"
+                "       %-19.18s: %s"
                 "       %-19.18s: %u\n"
                 "         To remove later\n" // TODO: Remove later
                 "         %-17.16s: %s\n"
@@ -778,6 +792,10 @@ pcp_mapping_print (pcp_mapping mapping)
                 mapping->lifetime,
                 "Lifetime remaining",
                 pcp_mapping_remaining_lifetime_get (mapping),
+                "First requested",
+                start_of_life_str,
+                "Expiry date/time",
+                end_of_life_str,
                 "Protocol",
                 mapping->protocol,
                 "Path",  // TODO: Remove later
