@@ -15,12 +15,16 @@
 #define MAPPING_NONCE_SIZE 3
 #define MAP_OPCODE 1
 #define PEER_OPCODE 2
+#define ANNOUNCE_OPCODE 3
 #define PCP_SERVER_LISTENING_PORT 5351
 
 /* Macros for assigning R value of r_opcode in headers
  * Example usage: "header.r_opcode = R_REQUEST(MAP_OPCODE)" */
 #define R_REQUEST(opcode) (opcode & ~(1 << 7))
 #define R_RESPONSE(opcode) (opcode | (1 << 7))
+/* Macro for getting R or opcode values of r_opcode in headers */
+#define IS_RESPONSE(r_opcode) ((r_opcode & (1 << 7)) > 0)
+#define OPCODE(r_opcode) (r_opcode & ~(1 << 7))
 
 #include <stdint.h>
 #include <arpa/inet.h>
@@ -235,15 +239,12 @@ bool new_pcp_request_header (pcp_request_header *hdr,
                              u_int8_t opcode, u_int32_t requested_lifetime,
                              const char *ip6str);
 
-void new_pcp_response_header (pcp_response_header *hdr,
-                              u_int8_t opcode, result_code result, u_int32_t lifetime);
+void new_pcp_response_header (pcp_response_header *resp_hdr, pcp_request_header *req_hdr);
 
 // Create new PCP MAP packets
 map_request *new_pcp_map_request (u_int32_t requested_lifetime, const char *ip6str);
 
-map_response *new_pcp_map_response (map_request *pcp_map_request,
-                                    u_int32_t lifetime, result_code result, u_int16_t port,
-                                    struct in6_addr *ipv6_addr);
+map_response *new_pcp_map_response (map_request *map_req);
 
 // Create new PCP PEER packets
 peer_request *new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip6str);

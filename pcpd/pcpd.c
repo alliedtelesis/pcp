@@ -30,6 +30,16 @@
 #define OUTPUT_BUF_SIZE 2048
 #define SMALL_BUF_SIZE 32
 
+/* Possible results from attempting to create a mapping */
+typedef enum
+{
+    CREATE_MAPPING_SUCCESS,
+    EXTEND_MAPPING_SUCCESS,
+    EXTEND_MAPPING_FAILED,
+    INVALID_MAPPING_REQUEST,
+    // TODO: Other cases e.g. no resources, excessive peers, network failure, etc.
+} create_mapping_result;
+
 /* Long version of argument options */
 static struct option long_options[] = {
     { "output", required_argument, NULL, 'o' },
@@ -63,6 +73,23 @@ GList *mappings = NULL;
 pthread_t mapping_thread;
 static pthread_mutex_t mapping_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+/** TODO: Remove */
+void
+print_mappings_debug (void)
+{
+    puts("\n printing all mappings from apteryx");
+    GList *apteryx_mappings = pcp_mapping_getall ();
+    pcp_mapping_printall (apteryx_mappings);
+    g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
+    puts(" end printing all mappings from apteryx\n");
+
+    pthread_mutex_lock (&mapping_lock);
+    puts("\n printing all mappings from local list");
+    pcp_mapping_printall (mappings);
+    puts(" end printing all mappings from local list\n");
+    pthread_mutex_unlock (&mapping_lock);
+}
 
 /**
  * @brief usage - Print help text to stdout
@@ -386,6 +413,57 @@ find_mapping_by_request (map_request *map_req)
     return NULL;
 }
 
+create_mapping_result
+create_mapping (map_response *map_resp, map_request *map_req)
+{
+    pcp_mapping mapping;
+    u_int32_t new_lifetime;
+    u_int32_t new_end_of_life;
+    create_mapping_result ret = CREATE_MAPPING_SUCCESS;
+
+    mapping = find_mapping_by_request (map_req);
+    if (mapping)
+    {
+        // Extend the existing mapping's lifetime by the validated lifetime currently stored in the response
+        new_lifetime = map_resp->header.lifetime;
+        new_end_of_life = time (NULL) + new_lifetime;
+        if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
+        {
+            mapping->lifetime = new_lifetime;
+            mapping->end_of_life = new_end_of_life;
+
+            // Put the existing mapping's external IP:port into the response
+            map_resp->assigned_external_ip = mapping->external_ip;
+            map_resp->assigned_external_port = mapping->external_port;
+
+            ret = EXTEND_MAPPING_SUCCESS;
+        }
+        else
+        {
+            ret = EXTEND_MAPPING_FAILED;
+        }
+
+        puts("MAPPING EXISTS");     // TODO: remove
+        print_mappings_debug ();    // TODO: remove
+    }
+    else
+    {
+        /* TODO:
+         * - Make mapping using values from the struct
+         * - Get info of mapping if successful, like assigned lifetime, ext port and ext ip address
+         * - Set result_code based on result
+         * Below are temporary values for these variables
+         */
+//        map_resp->header.lifetime = 9001;       // Lifetime of mapping or expected lifetime of resulting error
+        map_resp->header.lifetime = 10;         // Short lifetime to test the lifetime check thread
+        map_resp->assigned_external_port = 4321;
+        struct in6_addr temp_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
+                                        0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
+        map_resp->assigned_external_ip = temp_ip;
+    }
+    return ret;
+}
+
 /**
  * @brief process_map_request - Process a MAP request and create MAP response
  * @param pkt_buf - Serialized MAP request buffer
@@ -394,88 +472,58 @@ find_mapping_by_request (map_request *map_req)
 unsigned char *
 process_map_request (unsigned char *pkt_buf)
 {
+    // TODO: New parameter to get the sender's IP address
     unsigned char *ptr;
     map_request *map_req;
     map_response *map_resp;
-
-    u_int32_t lifetime;
-    u_int16_t assigned_ext_port;
-    char *assigned_ext_ip_str;
-    struct in6_addr assigned_ext_ip;
-    result_code result;
     int mapping_index;
-    u_int32_t new_end_of_life;
+    create_mapping_result mapping_result;
 
+    /* TODO: Check MALFORMED_REQUEST or NO_RESOURCES when deserializing, somehow process a malformed request.
+     * Maybe have to directly set bytes in pkt_buf and return that if struct can't be created */
     map_req = deserialize_map_request (pkt_buf);
 
-    result = SUCCESS;
-    /* TODO:
-     * - Validate values on struct. E.g. if version != 2 then "result = UNSUPP_VERSION;"
-     * If (result == SUCCESS) so far:
-     * - Make mapping using values from the struct
-     * - Get info of mapping if successful, like assigned lifetime, ext port and ext ip address
-     * - Set result_code based on result
-     * Below are temporary values for these variables
-     */
-//    lifetime = 9001;    // Lifetime of mapping or expected lifetime of resulting error
-    lifetime = 10;      // Short lifetime to test the lifetime check thread
-    assigned_ext_port = 4321;
-    assigned_ext_ip_str = "80fe::2020:ff3b:2eef:3829";
-    if (!inet_pton (AF_INET6, assigned_ext_ip_str, &assigned_ext_ip))
+    map_resp = new_pcp_map_response (map_req);
+
+    // TODO: Validate values on request struct. E.g. if version != 2 then "result = UNSUPP_VERSION;"
+    map_resp->header.result_code = SUCCESS; // TODO: replace SUCCESS with something like validate(map_req)
+
+    if (map_resp->header.result_code == SUCCESS)
     {
-        perror ("failed parsing");
-        result = NETWORK_FAILURE;
+        mapping_result = create_mapping (map_resp, map_req);
     }
-    //result = NOT_AUTHORIZED;
-
-    pcp_mapping mapping = find_mapping_by_request (map_req);
-    if (mapping)
+    else
     {
-        puts("MAPPING EXISTS");
-        new_end_of_life = time (NULL) + mapping->lifetime;
-        pcp_mapping_refresh_lifetime (mapping->index, new_end_of_life);
-        mapping->end_of_life = new_end_of_life;
-
-        //TODO: remove below
-        puts("\n printing all mappings from apteryx");
-        GList *apteryx_mappings = pcp_mapping_getall ();
-        pcp_mapping_printall (apteryx_mappings);
-        g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
-        puts(" end printing all mappings from apteryx\n");
-
-        puts("\n printing all mappings from local list");
-        pcp_mapping_printall (mappings);
-        puts(" end printing all mappings from local list\n");
+        mapping_result = INVALID_MAPPING_REQUEST;
     }
-    else if (result == SUCCESS)
+
+    if (mapping_result == CREATE_MAPPING_SUCCESS)
     {
+        // Add a new mapping
         mapping_index = -1;     // Next highest index
         pcp_mapping_add (mapping_index,
-                         map_req->mapping_nonce,
+                         map_resp->mapping_nonce,
                          &(map_req->header.client_ip),
-                         map_req->internal_port,
-                         &assigned_ext_ip,
-                         assigned_ext_port,
-                         lifetime,
-                         MAP_OPCODE,
-                         map_req->protocol);
+                         map_resp->internal_port,
+                         &map_resp->assigned_external_ip,
+                         map_resp->assigned_external_port,
+                         map_resp->header.lifetime,
+                         OPCODE (map_resp->header.r_opcode),
+                         map_resp->protocol);
 
-        //TODO: remove below
-        puts("\n printing all mappings from apteryx");
-        GList *apteryx_mappings = pcp_mapping_getall ();
-        pcp_mapping_printall (apteryx_mappings);
-        g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
-        puts(" end printing all mappings from apteryx\n");
-
-        puts("\n printing all mappings from local list");
-        pcp_mapping_printall (mappings);
-        puts(" end printing all mappings from local list\n");
+        print_mappings_debug (); // TODO: remove
+    }
+    else if (mapping_result == EXTEND_MAPPING_FAILED)
+    {
+        map_resp->header.result_code = NO_RESOURCES;
+    }
+    else if (mapping_result == INVALID_MAPPING_REQUEST)
+    {
+        // TODO: Set error lifetime of response based on current result code
     }
 
-    map_resp =
-        new_pcp_map_response (map_req, lifetime, result, assigned_ext_port,
-                              &assigned_ext_ip);
-
+    // Done. Send the response
+    map_resp->header.epoch_time = time (NULL);
     ptr = serialize_map_response (pkt_buf, map_resp);
 
     free (map_req);
@@ -651,6 +699,7 @@ run_loop (int sock, socklen_t fromlen)
     unsigned char *ptr = NULL;
     packet_type type;
 
+    // TODO: Handle IPv6
     n = recvfrom (sock, pkt_buf, MAX_STRING_LEN - 1, 0, (struct sockaddr *) &from,
                   &fromlen);
     check_error (n, "recvfrom");
@@ -661,6 +710,8 @@ run_loop (int sock, socklen_t fromlen)
 
     if (type == MAP_REQUEST && config.map_support == true)
     {
+        /* TODO: Pass a parameter so actual IP received from can be compared to
+         * internal IP stored in packet header for the ADDRESS_MISMATCH result code */
         ptr = process_map_request (pkt_buf);
 
         pkt_buf_changed = true;
@@ -713,17 +764,7 @@ check_mapping_lifetimes (void *arg)
             usleep (25 * 1000); // Give apteryx and callbacks time to run
             printf ("%d mappings deleted at %u - printing now\n", count, (u_int32_t) time (NULL));
 
-            puts("\n printing all mappings from apteryx");
-            GList *apteryx_mappings = pcp_mapping_getall ();
-            pcp_mapping_printall (apteryx_mappings);
-            g_list_free_full (apteryx_mappings, (GDestroyNotify) pcp_mapping_destroy);
-            puts(" end printing all mappings from apteryx\n");
-
-            pthread_mutex_lock (&mapping_lock);
-            puts("\n printing all mappings from local list");
-            pcp_mapping_printall (mappings);
-            puts(" end printing all mappings from local list\n");
-            pthread_mutex_unlock (&mapping_lock);
+            print_mappings_debug (); // TODO: remove
 
             deleted = false;
             count = 0;

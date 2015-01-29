@@ -194,6 +194,7 @@ deserialize_response_header (pcp_response_header *hdr, unsigned char *data)
     return data;
 }
 
+// TODO: Return NULL on failed parsing
 map_request *
 deserialize_map_request (unsigned char *data)
 {
@@ -231,8 +232,8 @@ packet_type
 get_packet_type (unsigned char *pkt_buf)
 {
     u_int8_t r_opcode = pkt_buf[1];
-    bool response = (r_opcode & (1 << 7)) > 0;
-    u_int8_t opcode = r_opcode & ~(1 << 7);
+    bool response = IS_RESPONSE (r_opcode);
+    u_int8_t opcode = OPCODE (r_opcode);
 
     packet_type result = UNDEFINED;
 

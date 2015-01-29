@@ -229,7 +229,7 @@ pcp_mapping_add (int index,
 }
 
 bool
-pcp_mapping_refresh_lifetime (int index, u_int32_t new_end_of_life)
+pcp_mapping_refresh_lifetime (int index, u_int32_t new_lifetime, u_int32_t new_end_of_life)
 {
     char *path = NULL;
     bool ret;
@@ -247,6 +247,7 @@ pcp_mapping_refresh_lifetime (int index, u_int32_t new_end_of_life)
         return false;       // Out of memory
     }
 
+    ret = apteryx_set_int (path, LIFETIME_KEY, new_lifetime);
     ret = apteryx_set_int (path, END_OF_LIFE_KEY, new_end_of_life);
     free (path);
     return ret;

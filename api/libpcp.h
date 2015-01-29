@@ -20,6 +20,7 @@
 #define MAPPING_NONCE_SIZE 3
 #define MAP_OPCODE 1
 #define PEER_OPCODE 2
+#define ANNOUNCE_OPCODE 3
 #define PCP_SERVER_LISTENING_PORT 5351
 
 #define DEFAULT_MAP_SUPPORT false
@@ -76,7 +77,7 @@ pcp_mapping_add (int index,
                  u_int8_t opcode,
                  u_int8_t protocol);
 
-bool pcp_mapping_refresh_lifetime (int index, u_int32_t new_end_of_life);
+bool pcp_mapping_refresh_lifetime (int index, u_int32_t new_lifetime, u_int32_t new_end_of_life);
 
 bool pcp_mapping_delete (int index);
 

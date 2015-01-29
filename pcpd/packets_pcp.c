@@ -35,24 +35,22 @@ new_pcp_request_header (pcp_request_header *hdr,
 
 /**
  * @brief new_pcp_response_header - Create a new pcp response header, used by servers
- * @param hdr - Where to place result
- * @param opcode - The opcode of the packet
- * @param result - The result code
+ * @param resp_hdr - Where to place the created response
+ * @param req_hdr - The corresponding request header
  * @param lifetime - Lifetime of mapping or expected lifetime of error
  */
 void
-new_pcp_response_header (pcp_response_header *hdr,
-                         u_int8_t opcode, result_code result, u_int32_t lifetime)
+new_pcp_response_header (pcp_response_header *resp_hdr, pcp_request_header *req_hdr)
 {
-    hdr->version = PCP_VERSION;
-    hdr->r_opcode = R_RESPONSE (opcode);
-    hdr->reserved = 0;
-    hdr->result_code = result;
-    hdr->lifetime = lifetime;
-    hdr->epoch_time = time (NULL);
-    hdr->reserved_array[0] = 0;
-    hdr->reserved_array[1] = 0;
-    hdr->reserved_array[2] = 0;
+    resp_hdr->version = PCP_VERSION;    // Set version to pcpd's current version
+    resp_hdr->r_opcode = R_RESPONSE (req_hdr->r_opcode);    // Set R bit of opcode
+    resp_hdr->reserved = 0;
+    resp_hdr->result_code = SUCCESS;    // Set result to SUCCESS (0)
+    resp_hdr->lifetime = req_hdr->requested_lifetime;
+    resp_hdr->epoch_time = 0;           // Set this to time (NULL) before sending
+    resp_hdr->reserved_array[0] = 0;
+    resp_hdr->reserved_array[1] = 0;
+    resp_hdr->reserved_array[2] = 0;
 }
 
 /**
@@ -79,21 +77,15 @@ new_pcp_map_request (u_int32_t requested_lifetime, const char *ip6str)
 }
 
 /**
- * @brief new_pcp_map_response - Create a new PCP MAP response based on results from
- *  a PCP MAP request and the creation of the mapping.
- * @param lifetime - Lifetime of mapping or expected lifetime of error
- * @param port - The assigned external port
- * @param ipv6_addr - The ipv6 address of assigned external address
+ * @brief new_pcp_map_response - Create a new initial PCP MAP response
+ * @param map_req - MAP request to copy values from
  * @return - The MAP response packet
  */
 map_response *
-new_pcp_map_response (map_request *map_req,
-                      u_int32_t lifetime, result_code result, u_int16_t port,
-                      struct in6_addr *ipv6_addr)
+new_pcp_map_response (map_request *map_req)
 {
-    // TODO: Make function work as described in RFC page 24/25
     map_response *map_resp = malloc (sizeof (map_response));
-    new_pcp_response_header (&map_resp->header, MAP_OPCODE, result, lifetime);
+    new_pcp_response_header (&map_resp->header, &map_req->header);
     map_resp->mapping_nonce[0] = map_req->mapping_nonce[0];
     map_resp->mapping_nonce[1] = map_req->mapping_nonce[1];
     map_resp->mapping_nonce[2] = map_req->mapping_nonce[2];
@@ -101,18 +93,8 @@ new_pcp_map_response (map_request *map_req,
     map_resp->reserved_1 = 0;
     map_resp->reserved_2 = 0;
     map_resp->internal_port = map_req->internal_port;
-
-    if (map_resp->header.result_code == SUCCESS)
-    {
-        // If SUCCESS, put actual values of assigned ip/port in, NOT copy over from request
-        map_resp->assigned_external_port = port;
-        map_resp->assigned_external_ip = *ipv6_addr;
-    }
-    else
-    {
-        map_resp->assigned_external_port = map_req->suggested_external_port;
-        map_resp->assigned_external_ip = map_req->suggested_external_ip;
-    }
+    map_resp->assigned_external_port = map_req->suggested_external_port;
+    map_resp->assigned_external_ip = map_req->suggested_external_ip;
     return map_resp;
 }
 
