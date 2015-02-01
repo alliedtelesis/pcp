@@ -36,7 +36,7 @@
 /** Mapping handle */
 struct pcp_mapping_s
 {
-    char *path;
+    char *path;                 // Path stored in apteryx in libpcp.
     int index;
     u_int32_t mapping_nonce[MAPPING_NONCE_SIZE];
     struct in6_addr internal_ip;

@@ -24,9 +24,6 @@ unsigned char *deserialize_ip_address (struct in6_addr *ip_address, unsigned cha
 
 unsigned char *deserialize_u_int32_t_array3 (u_int32_t dest[3], unsigned char *data);
 
-// Get the packet type by parsing a byte array.
-packet_type get_packet_type (unsigned char *pkt_buf);
-
 // Serialize a packet and place the result in a buffer.
 unsigned char *serialize_request_header (unsigned char *buffer, pcp_request_header *header);
 

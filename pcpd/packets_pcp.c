@@ -108,3 +108,139 @@ new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip6str)
     new_pcp_request_header (&peer_req->header, PEER_OPCODE, requested_lifetime, ip6str);
     return peer_req;
 }
+
+/**
+ * @brief new_pcp_error_response - Create a new error PCP response
+ * @param r_opcode - The r_opcode value in the original packet
+ * @param result - The error result
+ * @param lifetime - The lifetime of the error
+ * @return - The error response
+ */
+pcp_response_header *
+new_pcp_error_response (u_int8_t r_opcode, result_code result, u_int32_t lifetime)
+{
+    pcp_response_header *error_resp = malloc (sizeof (pcp_response_header));
+    error_resp->version = PCP_VERSION;
+    error_resp->r_opcode = R_RESPONSE (r_opcode);
+    error_resp->reserved = 0;
+    error_resp->result_code = result;
+    error_resp->lifetime = lifetime;
+    error_resp->epoch_time = time (NULL);
+    error_resp->reserved_array[0] = 0;
+    error_resp->reserved_array[1] = 0;
+    error_resp->reserved_array[2] = 0;
+    return error_resp;
+}
+
+u_int8_t
+get_version (unsigned char *pkt_buf)
+{
+    return pkt_buf[0];
+}
+
+u_int8_t
+get_r_opcode (unsigned char *pkt_buf)
+{
+    return pkt_buf[1];
+}
+
+bool
+r_bit_is_set (unsigned char *pkt_buf)
+{
+    return IS_RESPONSE (get_r_opcode (pkt_buf));
+}
+
+/*
+ * Get the packet type of the byte string to deserialize.
+ */
+packet_type
+get_packet_type (unsigned char *pkt_buf)
+{
+    u_int8_t r_opcode = pkt_buf[1];
+    bool response = IS_RESPONSE (r_opcode);
+    u_int8_t opcode = OPCODE (r_opcode);
+
+    packet_type result = PACKET_TYPE_MAX;
+
+    if (opcode == MAP_OPCODE)
+    {
+        result = response ? MAP_RESPONSE : MAP_REQUEST;
+    }
+    else if (opcode == PEER_OPCODE)
+    {
+        result = response ? PEER_RESPONSE : PEER_REQUEST;
+    }
+    else if (opcode == ANNOUNCE_OPCODE)
+    {
+        result = response ? ANNOUNCE_RESPONSE : ANNOUNCE_REQUEST;
+    }
+    return result;
+}
+
+/**
+ * @brief validate_packet_buffer - Validate a packet buffer
+ * @param pkt_buf - Packet buffer
+ * @param n - Length of the packet buffer
+ * @return - Result code of the packet validation
+ */
+result_code
+validate_packet_buffer (unsigned char *pkt_buf, int n)
+{
+    result_code ret = SUCCESS;
+    packet_type type = PACKET_TYPE_MAX;
+
+    if (n < 2 || r_bit_is_set (pkt_buf))
+    {
+        /* Less than 2 octets long or received a response packet.
+         * Silently drop the packet. */
+        ret = RESULT_CODE_MAX;
+    }
+    else if (get_version (pkt_buf) != PCP_VERSION)
+    {
+        /* Unsupported version */
+        ret = UNSUPP_VERSION;
+    }
+    else if (n < 24)
+    {
+        /* Version supported but packet is too short. Silently drop the packet */
+        ret = RESULT_CODE_MAX;
+    }
+    else if (n > MAX_PAYLOAD_LEN || n % 4 != 0)
+    {
+        /* Packet is too long or not a mulitiple of 4 */
+        ret = MALFORMED_REQUEST;
+    }
+    else
+    {
+        /* Verify the opcode and ensure it's not too short for the opcode in question.
+         * Response packets have been discarded earlier. */
+        type = get_packet_type (pkt_buf);
+        if (type == PACKET_TYPE_MAX)
+        {
+            ret = UNSUPP_OPCODE;
+        }
+        else if ((type == MAP_REQUEST && n < MIN_MAP_PKT_LEN) ||
+                 (type == PEER_REQUEST && n < MIN_PEER_PKT_LEN) ||
+                 (type == ANNOUNCE_REQUEST && n < MIN_ANNOUNCE_PKT_LEN))
+        {
+            ret = MALFORMED_REQUEST;
+        }
+    }
+    return ret;
+}
+
+/**
+ * @brief add_zero_padding - Add zero-padding if pkt_buf length is not a multiple of 4
+ * @param pkt_buf - Buffer to modify
+ * @param ptr - Pointer to the next byte of the buffer
+ * @return - Pointer to the next byte of the buffer after zero-padding it
+ */
+unsigned char *
+add_zero_padding (unsigned char *pkt_buf, unsigned char *ptr)
+{
+    while ((ptr - pkt_buf) % 4 != 0)
+    {
+        *ptr++ = 0;
+    }
+    return ptr;
+}

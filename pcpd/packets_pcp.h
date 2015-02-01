@@ -8,6 +8,10 @@
 #define PACKETS_PCP_H
 
 #define MAX_STRING_LEN 256
+#define MAX_PAYLOAD_LEN 1100
+#define MIN_MAP_PKT_LEN 60
+#define MIN_PEER_PKT_LEN 80
+#define MIN_ANNOUNCE_PKT_LEN 24
 #define PACKED  __attribute__((packed))
 
 #define PCP_VERSION 2
@@ -34,13 +38,13 @@
  */
 typedef enum
 {
-    ANNOUNCE_REQUEST,   // 0
-    ANNOUNCE_RESPONSE,  // 1
-    MAP_REQUEST,        // 2
-    MAP_RESPONSE,       // 3
-    PEER_REQUEST,       // 4
-    PEER_RESPONSE,      // 5
-    UNDEFINED           // 6
+    MAP_REQUEST,        // 0
+    MAP_RESPONSE,       // 1
+    PEER_REQUEST,       // 2
+    PEER_RESPONSE,      // 3
+    ANNOUNCE_REQUEST,   // 4
+    ANNOUNCE_RESPONSE,  // 5
+    PACKET_TYPE_MAX     // 6 - Error case
 } packet_type;
 
 /*
@@ -62,6 +66,7 @@ typedef enum
     CANNOT_PROVIDE_EXTERNAL,
     ADDRESS_MISMATCH,
     EXCESSIVE_REMOTE_PEERS,
+    RESULT_CODE_MAX,        // Used for error checking only. Do not use in responses.
 } result_code;
 
 /* Define a PCP request packet header
@@ -249,6 +254,21 @@ map_response *new_pcp_map_response (map_request *map_req);
 // Create new PCP PEER packets
 peer_request *new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip6str);
 
+// Create a new PCP error response
+pcp_response_header *new_pcp_error_response (u_int8_t r_opcode, result_code result, u_int32_t lifetime);
 
+// Validate a PCP packet buffer
+result_code validate_packet_buffer (unsigned char *pkt_buf, int n);
+
+// Getting PCP variables by parsing a byte array.
+u_int8_t get_version (unsigned char *pkt_buf);
+
+u_int8_t get_r_opcode (unsigned char *pkt_buf);
+
+bool r_bit_is_set (unsigned char *pkt_buf);
+
+packet_type get_packet_type (unsigned char *pkt_buf);
+
+unsigned char *add_zero_padding (unsigned char *pkt_buf, unsigned char *ptr);
 
 #endif /* PACKETS_PCP_H */

@@ -194,7 +194,6 @@ deserialize_response_header (pcp_response_header *hdr, unsigned char *data)
     return data;
 }
 
-// TODO: Return NULL on failed parsing
 map_request *
 deserialize_map_request (unsigned char *data)
 {
@@ -223,27 +222,4 @@ deserialize_map_response (unsigned char *data)
     data = deserialize_u_int16_t (&map_resp->assigned_external_port, data);
     data = deserialize_ip_address (&map_resp->assigned_external_ip, data);
     return map_resp;
-}
-
-/*
- * Get the packet type of the byte string to deserialize.
- */
-packet_type
-get_packet_type (unsigned char *pkt_buf)
-{
-    u_int8_t r_opcode = pkt_buf[1];
-    bool response = IS_RESPONSE (r_opcode);
-    u_int8_t opcode = OPCODE (r_opcode);
-
-    packet_type result = UNDEFINED;
-
-    if (opcode == MAP_OPCODE)
-    {
-        result = response ? MAP_RESPONSE : MAP_REQUEST;
-    }
-    else if (opcode == PEER_OPCODE)
-    {
-        result = response ? PEER_RESPONSE : PEER_REQUEST;
-    }
-    return result;
 }

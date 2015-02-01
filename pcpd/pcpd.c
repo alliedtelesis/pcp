@@ -30,6 +30,11 @@
 #define OUTPUT_BUF_SIZE 2048
 #define SMALL_BUF_SIZE 32
 
+/* Short lifetime errors use a 30-second lifetime and
+ * long lifetime errors use a 30-minute lifetime. */
+#define SHORT_LIFETIME_ERROR 30
+#define LONG_LIFETIME_ERROR 1800
+
 /* Possible results from attempting to create a mapping */
 typedef enum
 {
@@ -465,6 +470,66 @@ create_mapping (map_response *map_resp, map_request *map_req)
 }
 
 /**
+ * @brief get_error_lifetime - Get the lifetime of a result code error. Does not
+ *          process SUCCESS or CANNOT_PROVIDE_EXTERNAL result codes.
+ * @param result - Constant value for either a short or long lifetime error, or
+ *          0 if not supported
+ * @return - The error lifetime
+ */
+static u_int32_t
+get_error_lifetime (result_code result)
+{
+    u_int32_t ret = 0;
+
+    switch (result)
+    {
+    case NETWORK_FAILURE:
+    case NO_RESOURCES:
+    case USER_EX_QUOTA:
+        ret = SHORT_LIFETIME_ERROR;
+        break;
+
+    case UNSUPP_VERSION:
+    case NOT_AUTHORIZED:
+    case MALFORMED_REQUEST:
+    case UNSUPP_OPCODE:
+    case MALFORMED_OPTION:
+    case UNSUPP_OPTION:
+    case UNSUPP_PROTOCOL:
+    case ADDRESS_MISMATCH:
+    case EXCESSIVE_REMOTE_PEERS:
+        ret = LONG_LIFETIME_ERROR;
+        break;
+
+    default:
+        ret = 0;
+        break;
+    }
+
+    return ret;
+}
+
+u_int32_t
+get_valid_lifetime (u_int32_t lifetime)
+{
+    u_int32_t new_lifetime;
+
+    if (lifetime < config.min_mapping_lifetime)
+    {
+        new_lifetime = config.min_mapping_lifetime;
+    }
+    else if (lifetime > config.max_mapping_lifetime)
+    {
+        new_lifetime = config.max_mapping_lifetime;
+    }
+    else
+    {
+        new_lifetime = lifetime;
+    }
+    return new_lifetime;
+}
+
+/**
  * @brief process_map_request - Process a MAP request and create MAP response
  * @param pkt_buf - Serialized MAP request buffer
  * @return - Serialized MAP response
@@ -472,30 +537,19 @@ create_mapping (map_response *map_resp, map_request *map_req)
 unsigned char *
 process_map_request (unsigned char *pkt_buf)
 {
-    // TODO: New parameter to get the sender's IP address
+    // TODO: New parameter to get the sender's IP address to compare with client IP in packet
     unsigned char *ptr;
     map_request *map_req;
     map_response *map_resp;
     int mapping_index;
     create_mapping_result mapping_result;
 
-    /* TODO: Check MALFORMED_REQUEST or NO_RESOURCES when deserializing, somehow process a malformed request.
-     * Maybe have to directly set bytes in pkt_buf and return that if struct can't be created */
     map_req = deserialize_map_request (pkt_buf);
 
     map_resp = new_pcp_map_response (map_req);
 
-    // TODO: Validate values on request struct. E.g. if version != 2 then "result = UNSUPP_VERSION;"
-    map_resp->header.result_code = SUCCESS; // TODO: replace SUCCESS with something like validate(map_req)
-
-    if (map_resp->header.result_code == SUCCESS)
-    {
-        mapping_result = create_mapping (map_resp, map_req);
-    }
-    else
-    {
-        mapping_result = INVALID_MAPPING_REQUEST;
-    }
+    map_resp->header.lifetime = get_valid_lifetime (map_resp->header.lifetime);
+    mapping_result = create_mapping (map_resp, map_req);
 
     if (mapping_result == CREATE_MAPPING_SUCCESS)
     {
@@ -516,10 +570,11 @@ process_map_request (unsigned char *pkt_buf)
     else if (mapping_result == EXTEND_MAPPING_FAILED)
     {
         map_resp->header.result_code = NO_RESOURCES;
+        map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);
     }
     else if (mapping_result == INVALID_MAPPING_REQUEST)
     {
-        // TODO: Set error lifetime of response based on current result code
+        map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);
     }
 
     // Done. Send the response
@@ -689,43 +744,122 @@ delete_pcp_mapping (int index)
     pthread_mutex_unlock (&mapping_lock);
 }
 
-void
-run_loop (int sock, socklen_t fromlen)
+/**
+ * @brief process_request - Process a valid PCP request
+ * @param pkt_buf - Packet buffer
+ * @return - Pointer to the end of the next byte after the serialized response
+ *           if successful or NULL if opcode is not supported is or disabled
+ */
+unsigned char *
+process_request (unsigned char *pkt_buf)
 {
-    int n;
-    struct sockaddr_in from;
-    unsigned char pkt_buf[MAX_STRING_LEN];
-    bool pkt_buf_changed;
+    packet_type type = get_packet_type (pkt_buf);
     unsigned char *ptr = NULL;
-    packet_type type;
-
-    // TODO: Handle IPv6
-    n = recvfrom (sock, pkt_buf, MAX_STRING_LEN - 1, 0, (struct sockaddr *) &from,
-                  &fromlen);
-    check_error (n, "recvfrom");
-
-    type = get_packet_type (pkt_buf);
-
-    pkt_buf_changed = false;
 
     if (type == MAP_REQUEST && config.map_support == true)
     {
         /* TODO: Pass a parameter so actual IP received from can be compared to
          * internal IP stored in packet header for the ADDRESS_MISMATCH result code */
         ptr = process_map_request (pkt_buf);
+    }
+    // TODO: PEER_REQUEST and ANNOUNCE_REQUEST (ANNOUNCE opcode is non-configurable)
+    return ptr;
+}
 
-        pkt_buf_changed = true;
+/**
+ * @brief process_error - Process an PCP request which resulted in an error
+ * @param pkt_buf - Packet buffer
+ * @param result - The error's result code
+ * @return - Pointer to the next byte after the serialized error response
+ */
+unsigned char *
+process_error (unsigned char *pkt_buf, result_code result)
+{
+    unsigned char *ptr = NULL;
+    pcp_response_header *error_resp = new_pcp_error_response (
+                get_r_opcode (pkt_buf), result, get_error_lifetime (result));
+
+    ptr = serialize_response_header (pkt_buf, error_resp);
+
+    free (error_resp);
+
+    /* If it is desired to append the extra garbage in the error packet, set ptr to be
+     * at the end of the packet. Maybe new parameter of pkt_buf size n and
+     * return pkt_buf + n since the rest of pkt_buf is untouched */
+
+    return ptr;
+}
+
+/**
+ * @brief run_loop - The main loop
+ * @param sock - Server socket number
+ */
+void
+run_loop (int sock)
+{
+    int n;
+    struct sockaddr_in from;
+    socklen_t fromlen = sizeof (struct sockaddr_in);
+    unsigned char pkt_buf[MAX_PAYLOAD_LEN + 1];
+    unsigned char *ptr = NULL;
+    result_code result = SUCCESS;
+
+    // TODO: Handle IPv6
+    /* Receive one more byte than the max size so that the error case of a packet being
+     * too large can be detected */
+    n = recvfrom (sock, pkt_buf, MAX_PAYLOAD_LEN + 1, 0, (struct sockaddr *) &from,
+                  &fromlen);
+    check_error (n, "recvfrom");
+
+    result = validate_packet_buffer (pkt_buf, n);
+
+    switch (result)
+    {
+    case RESULT_CODE_MAX:
+        // Silently drop the packet
+        return;
+
+    case UNSUPP_VERSION:
+        // TODO: Follow Version Negotiation steps in RFC pg29
+        // Generate error response packet
+        ptr = process_error (pkt_buf, result);
+        break;
+
+    case MALFORMED_REQUEST:
+    case UNSUPP_OPCODE:
+        // Generate error response packet
+        ptr = process_error (pkt_buf, result);
+        break;
+
+    default:
+        // Validation successful
+        ptr = process_request (pkt_buf);
+        break;
     }
 
     // Send the response
-    if (pkt_buf_changed)
+    if (ptr)
     {
+        // Packet processing was successful and a response was generated in pkt_buf
+        if (ptr - pkt_buf > MAX_PAYLOAD_LEN)
+        {
+            // Packet is longer than the maximum. Move the pointer.
+            ptr = pkt_buf + MAX_PAYLOAD_LEN;
+        }
+        else
+        {
+            ptr = add_zero_padding (pkt_buf, ptr);
+        }
         n = sendto (sock, pkt_buf, ptr - pkt_buf, 0, (struct sockaddr *) &from,
                     fromlen);
         check_error (n, "sendto");
     }
 }
 
+/**
+ * Background thread which periodically iterates through the list of current mappings
+ * and removes any expired ones.
+ */
 void *
 check_mapping_lifetimes (void *arg)
 {
@@ -797,7 +931,6 @@ int
 main (int argc, char *argv[])
 {
     int sock;
-    socklen_t fromlen;
 
     process_arguments (argc, argv);
 
@@ -827,11 +960,9 @@ main (int argc, char *argv[])
         syslog (LOG_ERR, "Failed to detach thread\n");
     }
 
-    fromlen = sizeof (struct sockaddr_in);
-
     while (1)
     {
-        run_loop (sock, fromlen);
+        run_loop (sock);
     }
     return EXIT_SUCCESS;
 }

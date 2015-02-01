@@ -181,7 +181,7 @@ pcp_mapping_add (int index,
 {
     char *path = NULL;
 
-    /* TODO: Verify valid, maybe check if mapping already exists */
+    /* TODO: Verify valid arguments */
 
     if (index == -1)
     {
@@ -710,7 +710,6 @@ pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
                                         mapping->protocol);
         }
     }
-    // TODO: extend lifetime
 
     if (mapping)
     {
