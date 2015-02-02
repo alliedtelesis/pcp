@@ -52,21 +52,21 @@ typedef enum
  */
 typedef enum
 {
-    SUCCESS,
-    UNSUPP_VERSION,
-    NOT_AUTHORIZED,
-    MALFORMED_REQUEST,
-    UNSUPP_OPCODE,
-    UNSUPP_OPTION,
-    MALFORMED_OPTION,
-    NETWORK_FAILURE,
-    NO_RESOURCES,
-    UNSUPP_PROTOCOL,
-    USER_EX_QUOTA,
-    CANNOT_PROVIDE_EXTERNAL,
-    ADDRESS_MISMATCH,
-    EXCESSIVE_REMOTE_PEERS,
-    RESULT_CODE_MAX,        // Used for error checking only. Do not use in responses.
+    SUCCESS,                    // 0
+    UNSUPP_VERSION,             // 1
+    NOT_AUTHORIZED,             // 2
+    MALFORMED_REQUEST,          // 3
+    UNSUPP_OPCODE,              // 4
+    UNSUPP_OPTION,              // 5
+    MALFORMED_OPTION,           // 6
+    NETWORK_FAILURE,            // 7
+    NO_RESOURCES,               // 8
+    UNSUPP_PROTOCOL,            // 9
+    USER_EX_QUOTA,              // 10
+    CANNOT_PROVIDE_EXTERNAL,    // 11
+    ADDRESS_MISMATCH,           // 12
+    EXCESSIVE_REMOTE_PEERS,     // 13
+    RESULT_CODE_MAX,            // 14 - Used for error checking only. Do not use in responses.
 } result_code;
 
 /* Define a PCP request packet header
@@ -257,9 +257,6 @@ peer_request *new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip
 // Create a new PCP error response
 pcp_response_header *new_pcp_error_response (u_int8_t r_opcode, result_code result, u_int32_t lifetime);
 
-// Validate a PCP packet buffer
-result_code validate_packet_buffer (unsigned char *pkt_buf, int n);
-
 // Getting PCP variables by parsing a byte array.
 u_int8_t get_version (unsigned char *pkt_buf);
 
@@ -269,6 +266,10 @@ bool r_bit_is_set (unsigned char *pkt_buf);
 
 packet_type get_packet_type (unsigned char *pkt_buf);
 
+// Validate a PCP packet buffer
+result_code validate_packet_buffer (unsigned char *pkt_buf, int n);
+
+// Zero-pad packet so that length is a multiple of 4
 unsigned char *add_zero_padding (unsigned char *pkt_buf, unsigned char *ptr);
 
 #endif /* PACKETS_PCP_H */

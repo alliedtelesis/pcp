@@ -230,7 +230,7 @@ validate_packet_buffer (unsigned char *pkt_buf, int n)
 }
 
 /**
- * @brief add_zero_padding - Add zero-padding if pkt_buf length is not a multiple of 4
+ * @brief add_zero_padding - Add zero-padding so that pkt_buf length is a multiple of 4
  * @param pkt_buf - Buffer to modify
  * @param ptr - Pointer to the next byte of the buffer
  * @return - Pointer to the next byte of the buffer after zero-padding it

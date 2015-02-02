@@ -4,6 +4,7 @@
 #include "stdlib.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 void
 partial_hexdump (void *data, unsigned int len, char *buffer)
@@ -204,50 +205,6 @@ test_deserialize_u_int32_t_array3 (void)
 }
 
 void
-test_get_packet_type_map_req (void)
-{
-    unsigned char test_value[24] = { '\0' };
-    test_value[1] = R_REQUEST (MAP_OPCODE);
-    packet_type answer = MAP_REQUEST;
-
-    packet_type result = get_packet_type (test_value);
-    NP_ASSERT_EQUAL (answer, result);
-}
-
-void
-test_get_packet_type_map_resp (void)
-{
-    unsigned char test_value[24] = { '\0' };
-    test_value[1] = R_RESPONSE (MAP_OPCODE);
-    packet_type answer = MAP_RESPONSE;
-
-    packet_type result = get_packet_type (test_value);
-    NP_ASSERT_EQUAL (answer, result);
-}
-
-void
-test_get_packet_type_peer_req (void)
-{
-    unsigned char test_value[24] = { '\0' };
-    test_value[1] = R_REQUEST (PEER_OPCODE);
-    packet_type answer = PEER_REQUEST;
-
-    packet_type result = get_packet_type (test_value);
-    NP_ASSERT_EQUAL (answer, result);
-}
-
-void
-test_get_packet_type_peer_resp (void)
-{
-    unsigned char test_value[24] = { '\0' };
-    test_value[1] = R_RESPONSE (PEER_OPCODE);
-    packet_type answer = PEER_RESPONSE;
-
-    packet_type result = get_packet_type (test_value);
-    NP_ASSERT_EQUAL (answer, result);
-}
-
-void
 test_serialize_request_header (void)
 {
     pcp_request_header test_hdr;
@@ -346,7 +303,7 @@ test_serialize_map_request (void)
     map_request test_map_req;
 
     // Test the header separately
-    pcp_request_header header;
+    pcp_request_header header = { 0 };
     u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = { 2058005162, 2058005161, 2058005160 };
     u_int8_t protocol = 6;
     u_int8_t reserved_1 = 0;
@@ -406,7 +363,7 @@ test_serialize_map_response (void)
     map_response test_map_resp;
 
     // Test the header separately
-    pcp_response_header header;
+    pcp_response_header header = { 0 };
     u_int32_t mapping_nonce[MAPPING_NONCE_SIZE] = { 2058005162, 2058005161, 2058005160 };
     u_int8_t protocol = 6;
     u_int8_t reserved_1 = 0;
@@ -647,4 +604,317 @@ test_deserialize_map_response (void)
     }
 
     free (result);
+}
+
+void
+test_new_pcp_response_header (void)
+{
+    pcp_request_header *pcp_req;
+    pcp_response_header *pcp_resp;
+    struct in6_addr temp_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
+                                    0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
+
+    pcp_req = malloc (sizeof (pcp_request_header));
+    pcp_resp = malloc (sizeof (pcp_response_header));
+
+    pcp_req->version = PCP_VERSION;
+    pcp_req->r_opcode = R_REQUEST (MAP_OPCODE);
+    pcp_req->reserved = 0;
+    pcp_req->requested_lifetime = 5000;
+    pcp_req->client_ip = temp_ip;
+
+    new_pcp_response_header (pcp_resp, pcp_req);
+
+    NP_ASSERT_EQUAL (pcp_resp->version, pcp_req->version);
+    NP_ASSERT_EQUAL (pcp_resp->r_opcode, R_RESPONSE (pcp_req->r_opcode));
+    NP_ASSERT_EQUAL (pcp_resp->reserved, 0);
+    NP_ASSERT_EQUAL (pcp_resp->result_code, SUCCESS);
+    NP_ASSERT_EQUAL (pcp_resp->lifetime, pcp_req->requested_lifetime);
+    NP_ASSERT_EQUAL (pcp_resp->epoch_time, 0);
+    NP_ASSERT_EQUAL (pcp_resp->reserved_array[0], 0);
+    NP_ASSERT_EQUAL (pcp_resp->reserved_array[1], 0);
+    NP_ASSERT_EQUAL (pcp_resp->reserved_array[2], 0);
+
+    free (pcp_req);
+    free (pcp_resp);
+}
+
+void
+test_new_pcp_map_response (void)
+{
+    map_request *map_req;
+    map_response *map_resp;
+
+    // Test header separately
+    pcp_request_header header = { 0 };
+    struct in6_addr temp_ext_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
+                                        0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
+
+    map_req = malloc (sizeof (map_request));
+
+    map_req->header = header;
+    map_req->mapping_nonce[0] = 123456789;
+    map_req->mapping_nonce[1] = 123456787;
+    map_req->mapping_nonce[2] = 123456782;
+    map_req->protocol = 6;
+    map_req->reserved_1 = 0;
+    map_req->reserved_2 = 0;
+    map_req->internal_port = 1234;
+    map_req->suggested_external_port = 4321;
+    map_req->suggested_external_ip = temp_ext_ip;
+
+    map_resp = new_pcp_map_response (map_req);
+
+    test_new_pcp_response_header ();
+    NP_ASSERT_EQUAL (map_resp->mapping_nonce[0], map_req->mapping_nonce[0]);
+    NP_ASSERT_EQUAL (map_resp->mapping_nonce[1], map_req->mapping_nonce[1]);
+    NP_ASSERT_EQUAL (map_resp->mapping_nonce[2], map_req->mapping_nonce[2]);
+    NP_ASSERT_EQUAL (map_resp->protocol, map_req->protocol);
+    NP_ASSERT_EQUAL (map_resp->reserved_1, 0);
+    NP_ASSERT_EQUAL (map_resp->reserved_2, 0);
+    NP_ASSERT_EQUAL (map_resp->internal_port, map_req->internal_port);
+    NP_ASSERT_EQUAL (map_resp->assigned_external_port, map_req->suggested_external_port);
+    NP_ASSERT_TRUE (memcmp (&map_resp->assigned_external_ip,
+                            &map_req->suggested_external_ip,
+                            sizeof (struct in6_addr)) == 0);
+
+    free (map_req);
+    free (map_resp);
+}
+
+void
+test_new_pcp_error_response (void)
+{
+    pcp_response_header *resp = new_pcp_error_response (MAP_OPCODE,
+                                                        EXCESSIVE_REMOTE_PEERS,
+                                                        3000);
+
+    // Test may fail if one second passes so check epoch time first to reduce chance of failing
+    NP_ASSERT_EQUAL (resp->epoch_time, (u_int32_t) time (NULL));
+
+    NP_ASSERT_EQUAL (resp->version, PCP_VERSION);
+    NP_ASSERT_EQUAL (resp->r_opcode, R_RESPONSE (MAP_OPCODE));
+    NP_ASSERT_EQUAL (resp->reserved, 0);
+    NP_ASSERT_EQUAL (resp->result_code, EXCESSIVE_REMOTE_PEERS);
+    NP_ASSERT_EQUAL (resp->lifetime, 3000);
+    NP_ASSERT_EQUAL (resp->reserved_array[0], 0);
+    NP_ASSERT_EQUAL (resp->reserved_array[1], 0);
+    NP_ASSERT_EQUAL (resp->reserved_array[2], 0);
+
+    free (resp);
+}
+
+void
+test_get_version (void)
+{
+    unsigned char test_value[24] = { '\0' };
+
+    test_value[0] = PCP_VERSION;
+    NP_ASSERT_EQUAL (get_version (test_value), PCP_VERSION);
+
+    test_value[0] = 64;
+    NP_ASSERT_EQUAL (get_version (test_value), 64);
+}
+
+void
+test_get_r_opcode (void)
+{
+    unsigned char test_value[24] = { '\0' };
+
+    test_value[1] = R_REQUEST (MAP_OPCODE);
+    NP_ASSERT_EQUAL (get_r_opcode (test_value), R_REQUEST (MAP_OPCODE));
+
+    test_value[1] = R_RESPONSE (MAP_OPCODE);
+    NP_ASSERT_EQUAL (get_r_opcode (test_value), R_RESPONSE (MAP_OPCODE));
+}
+
+void
+test_r_bit_is_set (void)
+{
+    unsigned char test_value[24] = { '\0' };
+
+    test_value[1] = R_REQUEST (MAP_OPCODE);
+    NP_ASSERT_FALSE (r_bit_is_set (test_value));
+
+    test_value[1] = R_RESPONSE (MAP_OPCODE);
+    NP_ASSERT_TRUE (r_bit_is_set (test_value));
+}
+
+void
+test_get_packet_type_map_req (void)
+{
+    unsigned char test_value[24] = { '\0' };
+    test_value[1] = R_REQUEST (MAP_OPCODE);
+    packet_type answer = MAP_REQUEST;
+
+    packet_type result = get_packet_type (test_value);
+    NP_ASSERT_EQUAL (answer, result);
+}
+
+void
+test_get_packet_type_map_resp (void)
+{
+    unsigned char test_value[24] = { '\0' };
+    test_value[1] = R_RESPONSE (MAP_OPCODE);
+    packet_type answer = MAP_RESPONSE;
+
+    packet_type result = get_packet_type (test_value);
+    NP_ASSERT_EQUAL (answer, result);
+}
+
+void
+test_get_packet_type_peer_req (void)
+{
+    unsigned char test_value[24] = { '\0' };
+    test_value[1] = R_REQUEST (PEER_OPCODE);
+    packet_type answer = PEER_REQUEST;
+
+    packet_type result = get_packet_type (test_value);
+    NP_ASSERT_EQUAL (answer, result);
+}
+
+void
+test_get_packet_type_peer_resp (void)
+{
+    unsigned char test_value[24] = { '\0' };
+    test_value[1] = R_RESPONSE (PEER_OPCODE);
+    packet_type answer = PEER_RESPONSE;
+
+    packet_type result = get_packet_type (test_value);
+    NP_ASSERT_EQUAL (answer, result);
+}
+
+/* Test validation cases where the packet would be dropped */
+void
+test_validate_packet_buffer_drop_packet (void)
+{
+    unsigned char test_value[MAX_PAYLOAD_LEN + 1] = { '\0' };
+    int n;
+
+    test_value[0] = PCP_VERSION;
+    test_value[1] = R_REQUEST (MAP_OPCODE);
+
+    // n value reduced to simulate receiving less bytes
+    for (n = 0; n < 24; n++)
+    {
+        // Got MAP request and buffer is not long enough to parse header
+        NP_ASSERT_EQUAL (validate_packet_buffer (test_value, n), RESULT_CODE_MAX);
+    }
+    // Got MAP request and buffer is long enough to parse header
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, 24), RESULT_CODE_MAX);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), RESULT_CODE_MAX);
+
+    test_value[1] = R_RESPONSE (MAP_OPCODE);
+
+    // Buffer is long enough to parse header, but received a MAP response
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, 24), RESULT_CODE_MAX);
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), RESULT_CODE_MAX);
+}
+
+/* Test validation cases where a result code of unsupported version or unsupported opcode
+ * would be returned to create an error response */
+void
+test_validate_packet_buffer_unsupported (void)
+{
+    unsigned char test_value[MAX_PAYLOAD_LEN + 1] = { '\0' };
+
+    test_value[0] = 74;                     // Bad version
+    test_value[1] = R_REQUEST (MAP_OPCODE); // Valid r_opcode
+
+    // Need at least 2 bytes to return UNSUPP_VERSION and 24 bytes to return UNSUPP_OPCODE
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, 2), UNSUPP_VERSION);
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_VERSION);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, 24), UNSUPP_OPCODE);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_OPCODE);
+
+    test_value[0] = PCP_VERSION;            // Valid version
+
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, 2), UNSUPP_VERSION);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_VERSION);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, 24), UNSUPP_OPCODE);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_OPCODE);
+
+    test_value[1] = R_REQUEST (6);          // Bad r_opcode
+
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, 2), UNSUPP_VERSION);
+    NP_ASSERT_NOT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_VERSION);
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, 24), UNSUPP_OPCODE);
+    NP_ASSERT_EQUAL (validate_packet_buffer (test_value, MAX_PAYLOAD_LEN), UNSUPP_OPCODE);
+}
+
+/* Helper function to iterate through possible packet sizes assuming the packet buffer is
+ * large enough to have a PCP header parsed, is a request packet, and the version and opcode
+ * are supported, and then check if return value is either MALFORMED_REQUEST or SUCCESS */
+static void
+check_malformed_request (unsigned char pkt_buf[MAX_PAYLOAD_LEN + 1], int min_pkt_size)
+{
+    int n;
+
+    for (n = 24; n < min_pkt_size; n++)
+    {
+        // Packet is too short for specified packet
+        NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, n), MALFORMED_REQUEST);
+    }
+
+    for (n = min_pkt_size; n <= MAX_PAYLOAD_LEN; n++)
+    {
+        if (n % 4 != 0)
+        {
+            // Packet is long enough but length is not a multiple of 4
+            NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, n), MALFORMED_REQUEST);
+        }
+        else
+        {
+            // Packet is correct
+            NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, n), SUCCESS);
+        }
+    }
+    // Packet is too long
+    NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, MAX_PAYLOAD_LEN + 1), MALFORMED_REQUEST);
+    // Ensure that it was not just the multiple of 4 case failing it
+    NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, MAX_PAYLOAD_LEN + 2), MALFORMED_REQUEST);
+    NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, MAX_PAYLOAD_LEN + 3), MALFORMED_REQUEST);
+    NP_ASSERT_EQUAL (validate_packet_buffer (pkt_buf, MAX_PAYLOAD_LEN + 4), MALFORMED_REQUEST);
+}
+
+/* Test the remaining validation cases where MALFORMED_REQUEST or SUCCESS is returned */
+void
+test_validate_packet_buffer_other (void)
+{
+    unsigned char test_value[MAX_PAYLOAD_LEN + 1] = { '\0' };
+    test_value[0] = PCP_VERSION;
+
+    test_value[1] = R_REQUEST (MAP_OPCODE);
+    check_malformed_request (test_value, MIN_MAP_PKT_LEN);
+
+    test_value[1] = R_REQUEST (PEER_OPCODE);
+    check_malformed_request (test_value, MIN_PEER_PKT_LEN);
+
+    test_value[1] = R_REQUEST (ANNOUNCE_OPCODE);
+    check_malformed_request (test_value, MIN_ANNOUNCE_PKT_LEN);
+}
+
+void
+test_add_zero_padding (void)
+{
+    // Initialize to all to non-zero so padded zeroes can easily be asserted
+    unsigned char test_value[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+    unsigned char *ptr;
+
+    ptr = test_value + 5;   // point to sixth char, equivalent to stating pkt_buf is length 5
+
+    NP_ASSERT_NOT_EQUAL ((ptr - test_value) % 4, 0);    // Check length is not a multiple of 4
+
+    ptr = add_zero_padding (test_value, ptr);
+
+    NP_ASSERT_EQUAL (test_value[0], 0xff);      // Check earlier chars are untouched
+    NP_ASSERT_EQUAL (test_value[1], 0xff);
+    NP_ASSERT_EQUAL (test_value[2], 0xff);
+    NP_ASSERT_EQUAL (test_value[3], 0xff);
+    NP_ASSERT_EQUAL (test_value[4], 0xff);
+    NP_ASSERT_EQUAL (test_value[5], 0);         // Check the others are padded to zero
+    NP_ASSERT_EQUAL (test_value[6], 0);
+    NP_ASSERT_EQUAL (test_value[7], 0);
+
+    NP_ASSERT_EQUAL ((ptr - test_value) % 4, 0);    // Check length is now a multiple of 4
 }
