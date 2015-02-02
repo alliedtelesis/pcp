@@ -39,6 +39,8 @@
 typedef enum
 {
     CREATE_MAPPING_SUCCESS,
+    DELETE_MAPPING_SUCCESS,
+    DELETE_MAPPING_FAILED,
     EXTEND_MAPPING_SUCCESS,
     EXTEND_MAPPING_FAILED,
     INVALID_MAPPING_REQUEST,
@@ -432,7 +434,12 @@ create_mapping (map_response *map_resp, map_request *map_req)
         // Extend the existing mapping's lifetime by the validated lifetime currently stored in the response
         new_lifetime = map_resp->header.lifetime;
         new_end_of_life = time (NULL) + new_lifetime;
-        if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
+
+        if (new_lifetime == 0)
+        {
+            ret = pcp_mapping_delete (mapping->index) ? DELETE_MAPPING_SUCCESS : DELETE_MAPPING_FAILED;
+        }
+        else if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
         {
             mapping->lifetime = new_lifetime;
             mapping->end_of_life = new_end_of_life;
@@ -448,6 +455,7 @@ create_mapping (map_response *map_resp, map_request *map_req)
             ret = EXTEND_MAPPING_FAILED;
         }
 
+        usleep (25 * 1000);         // Give apteryx and callbacks time to run
         puts("MAPPING EXISTS");     // TODO: remove
         print_mappings_debug ();    // TODO: remove
     }
@@ -460,7 +468,7 @@ create_mapping (map_response *map_resp, map_request *map_req)
          * Below are temporary values for these variables
          */
 //        map_resp->header.lifetime = 9001;       // Lifetime of mapping or expected lifetime of resulting error
-        map_resp->header.lifetime = 10;         // Short lifetime to test the lifetime check thread
+//        map_resp->header.lifetime = 10;         // Short lifetime to test the lifetime check thread
         map_resp->assigned_external_port = 4321;
         struct in6_addr temp_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
                                         0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
@@ -514,7 +522,8 @@ get_valid_lifetime (u_int32_t lifetime)
 {
     u_int32_t new_lifetime;
 
-    if (lifetime < config.min_mapping_lifetime)
+    // Ignore 0 since that means delete the mapping
+    if (lifetime > 0 && lifetime < config.min_mapping_lifetime)
     {
         new_lifetime = config.min_mapping_lifetime;
     }
@@ -567,7 +576,8 @@ process_map_request (unsigned char *pkt_buf)
 
         print_mappings_debug (); // TODO: remove
     }
-    else if (mapping_result == EXTEND_MAPPING_FAILED)
+    else if (mapping_result == EXTEND_MAPPING_FAILED ||
+             mapping_result == DELETE_MAPPING_FAILED)
     {
         map_resp->header.result_code = NO_RESOURCES;
         map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);

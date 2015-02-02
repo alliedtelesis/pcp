@@ -449,6 +449,83 @@ test_pcp_mapping_remaining_lifetime_get (void)
     pcp_mapping_destroy (mapping);
 }
 
+/* Test the function which refreshes the lifetime of a mapping */
+void
+test_pcp_mapping_refresh_lifetime_valid (void)
+{
+    int index1 = 600;
+    int index2 = 650;
+    int index3 = 700;
+    pcp_mapping mapping1;
+    pcp_mapping mapping2;
+    pcp_mapping mapping3;
+    u_int32_t new_lifetime1;
+    u_int32_t new_lifetime2;
+    u_int32_t new_lifetime3;
+    u_int32_t new_end_of_life1;
+    u_int32_t new_end_of_life2;
+    u_int32_t new_end_of_life3;
+
+    add_three_test_mappings (index1, index2, index3);
+
+    new_lifetime1 = 200;
+    new_lifetime2 = 0;
+    new_lifetime3 = 864000;
+    new_end_of_life1 = time (NULL) + new_lifetime1;
+    new_end_of_life2 = time (NULL) + new_lifetime2;
+    new_end_of_life3 = time (NULL) + new_lifetime3;
+
+    NP_ASSERT_TRUE (pcp_mapping_refresh_lifetime (index1, new_lifetime1, new_end_of_life1));
+    NP_ASSERT_TRUE (pcp_mapping_refresh_lifetime (index2, new_lifetime2, new_end_of_life2));
+    NP_ASSERT_TRUE (pcp_mapping_refresh_lifetime (index3, new_lifetime3, new_end_of_life3));
+
+    mapping1 = pcp_mapping_find (index1);
+    mapping2 = pcp_mapping_find (index2);
+    mapping3 = pcp_mapping_find (index3);
+
+    NP_ASSERT_NOT_NULL (mapping1);
+    NP_ASSERT_EQUAL (mapping1->lifetime, new_lifetime1);
+    NP_ASSERT_EQUAL (mapping1->end_of_life, new_end_of_life1);
+    pcp_mapping_destroy (mapping1);
+
+    NP_ASSERT_NOT_NULL (mapping2);
+    NP_ASSERT_EQUAL (mapping2->lifetime, new_lifetime2);
+    NP_ASSERT_EQUAL (mapping2->end_of_life, new_end_of_life2);
+    pcp_mapping_destroy (mapping2);
+
+    NP_ASSERT_NOT_NULL (mapping3);
+    NP_ASSERT_EQUAL (mapping3->lifetime, new_lifetime3);
+    NP_ASSERT_EQUAL (mapping3->end_of_life, new_end_of_life3);
+    pcp_mapping_destroy (mapping3);
+}
+
+void
+test_pcp_mapping_refresh_lifetime_invalid (void)
+{
+    int index1 = 750;
+    int index2 = 800;
+    int index3 = 850;
+    u_int32_t new_lifetime1;
+    u_int32_t new_lifetime2;
+    u_int32_t new_lifetime3;
+    u_int32_t new_end_of_life1;
+    u_int32_t new_end_of_life2;
+    u_int32_t new_end_of_life3;
+
+    add_three_test_mappings (index1, index2, index3);
+
+    new_lifetime1 = 200;
+    new_lifetime2 = 0;
+    new_lifetime3 = 864000;
+    new_end_of_life1 = time (NULL);     // Forget to add lifetime
+    new_end_of_life2 = 0;               // end_of_life is 0
+    new_end_of_life3 = new_lifetime3;   // Forget to add time (NULL)
+
+    NP_ASSERT_FALSE (pcp_mapping_refresh_lifetime (index1, new_lifetime1, new_end_of_life1));
+    NP_ASSERT_FALSE (pcp_mapping_refresh_lifetime (index2, new_lifetime2, new_end_of_life2));
+    NP_ASSERT_FALSE (pcp_mapping_refresh_lifetime (index3, new_lifetime3, new_end_of_life3));
+}
+
 /* Test the path processing in the pcp_config_changed function works correctly */
 void
 test_pcp_config_changed_valid_path (void)

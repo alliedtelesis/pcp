@@ -2,6 +2,9 @@
  * Function declarations for serializing PCP packet data
  */
 
+#ifndef PACKETS_PCP_SERIALIZATION_H
+#define PACKETS_PCP_SERIALIZATION_H
+
 // Serialize various types of variables and place into a buffer.
 unsigned char *serialize_u_int8_t (unsigned char *buffer, u_int8_t value);
 
@@ -42,3 +45,5 @@ unsigned char *deserialize_response_header (pcp_response_header *hdr, unsigned c
 map_request *deserialize_map_request (unsigned char *data);
 
 map_response *deserialize_map_response (unsigned char *data);
+
+#endif /* PACKETS_PCP_SERIALIZATION_H */

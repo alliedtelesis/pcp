@@ -192,7 +192,6 @@ pcp_mapping_add (int index,
         }
     }
 
-
     /* Make sure the specified mapping index is not in use */
     pcp_mapping mapping = pcp_mapping_find (index);
     if (mapping)
@@ -201,7 +200,6 @@ pcp_mapping_add (int index,
         pcp_mapping_destroy (mapping);
         return false;
     }
-
 
     if (asprintf (&path, MAPPING_PATH "/%d", index) == 0)
     {
@@ -228,11 +226,29 @@ pcp_mapping_add (int index,
     return true;            // Success
 }
 
+/**
+ * @brief pcp_mapping_refresh_lifetime - Function to change the lifetime of a mapping.
+ * @param index - Index of the mapping.
+ * @param new_lifetime - The mapping's new lifetime.
+ * @param new_end_of_life - The mapping's new end of life. This is so that a consistent
+ *          time (NULL) value is used.
+ * @return - true on success.
+ */
 bool
 pcp_mapping_refresh_lifetime (int index, u_int32_t new_lifetime, u_int32_t new_end_of_life)
 {
     char *path = NULL;
     bool ret;
+    u_int32_t expected = time (NULL) + new_lifetime;
+
+    /* As a sanity check, check that the new_end_of_life argument is close to the
+     * expected end_of_life value, given the current time and new_lifetime.
+     * Note that new_end_of_life is used to keep the mappings stored in apteryx
+     * and pcpd in sync. */
+    if (new_end_of_life < expected - 3 || new_end_of_life > expected + 3)
+    {
+        return false;
+    }
 
     /* Make sure the mapping exists */
     pcp_mapping mapping = pcp_mapping_find (index);
@@ -247,8 +263,8 @@ pcp_mapping_refresh_lifetime (int index, u_int32_t new_lifetime, u_int32_t new_e
         return false;       // Out of memory
     }
 
-    ret = apteryx_set_int (path, LIFETIME_KEY, new_lifetime);
-    ret = apteryx_set_int (path, END_OF_LIFE_KEY, new_end_of_life);
+    ret = apteryx_set_int (path, LIFETIME_KEY, new_lifetime) &&
+            apteryx_set_int (path, END_OF_LIFE_KEY, new_end_of_life);
     free (path);
     return ret;
 }
