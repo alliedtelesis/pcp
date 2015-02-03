@@ -67,6 +67,7 @@ typedef struct _pcp_config
     u_int32_t min_mapping_lifetime;
     u_int32_t max_mapping_lifetime;
     u_int32_t prefer_failure_req_rate_limit;
+    u_int32_t startup_epoch_time;
 } pcp_config;
 
 
@@ -126,6 +127,66 @@ check_error (int n, const char *msg)
     }
 }
 
+static int
+write_mapping (pcp_mapping mapping, FILE *target)
+{
+    int n = -1;
+
+    if (mapping != NULL && target != NULL)
+    {
+        char internal_ip_str[INET6_ADDRSTRLEN];
+        char external_ip_str[INET6_ADDRSTRLEN];
+        char start_of_life_str[TIME_BUF_SIZE];
+        char end_of_life_str[TIME_BUF_SIZE];
+
+        time_t start_of_life_time_t = (time_t) mapping->start_of_life;
+        time_t end_of_life_time_t = (time_t) mapping->end_of_life;
+
+        struct tm *start_of_life_tm = localtime (&start_of_life_time_t);
+        strftime (start_of_life_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, start_of_life_tm);
+
+        struct tm *end_of_life_tm = localtime (&end_of_life_time_t);
+        strftime (end_of_life_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, end_of_life_tm);
+
+        inet_ntop (AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
+        inet_ntop (AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
+
+        n = fprintf (target,
+                     "     %-21.20s: %d\n"
+                     "       %-19.18s: %10u %10u %10u\n"
+                     "       %-19.18s: [%s]:%u\n"
+                     "       %-19.18s: [%s]:%u\n"
+                     "       %-19.18s: %u\n"
+                     "       %-19.18s: %u\n"
+                     "       %-19.18s: %s\n"
+                     "       %-19.18s: %s\n"
+                     "       %-19.18s: %u\n\n",
+                     (mapping->opcode == MAP_OPCODE) ? "MAP mapping ID" : "PEER mapping ID",
+                     mapping->index,
+                     "Mapping nonce",
+                      mapping->mapping_nonce[0],
+                      mapping->mapping_nonce[1],
+                      mapping->mapping_nonce[2],
+                      "Internal IP:port",
+                      internal_ip_str,
+                      mapping->internal_port,
+                     "External IP:port",
+                      external_ip_str,
+                      mapping->external_port,
+                      "Lifetime",
+                      mapping->lifetime,
+                      "Lifetime remaining",
+                      pcp_mapping_remaining_lifetime_get (mapping),
+                      "First requested",
+                      start_of_life_str,
+                     "Expiry date/time",
+                      end_of_life_str,
+                      "Protocol",
+                      mapping->protocol);
+    }
+    return n;
+}
+
 /**
  * @brief write_pcp_state_to_file - Write PCP state to target file.
  * @param config - PCP config struct.
@@ -136,6 +197,19 @@ int
 write_pcp_state_to_file (pcp_config *config, FILE *target)
 {
     int n;
+
+    char startup_time_str[TIME_BUF_SIZE];
+    time_t startup_epoch_time_t = (time_t) config->startup_epoch_time;
+    struct tm *startup_time_tm = localtime (&startup_epoch_time_t);
+
+    char *uptime_string;
+
+    GList *elem;
+    pcp_mapping mapping = NULL;
+
+    strftime (startup_time_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, startup_time_tm);
+
+    uptime_string = get_uptime_string ();
 
     n = fprintf (target,
                  "PCP Config:\n"
@@ -173,31 +247,47 @@ write_pcp_state_to_file (pcp_config *config, FILE *target)
     n = fprintf (target,
                  "PCP Server:\n"
                  "     %-36.35s: %s\n"
-                 "     %-36.35s: %d\n",
-                 "Server IP address", "something",
-                 "Server uptime", 9001);
-
-    if (n < 0)
-        return n;
-
-    // Dynamic number of clients. Need some looping when implemented later (dynamic mem?). Maybe table format.
-    n = fprintf (target,
-                 "PCP Clients:\n"
                  "     %-36.35s: %s\n"
-                 "     %-36.35s: %d\n",
+                 "     %-36.35s: %s\n",
                  "Server IP address", "something",
-                 "Server uptime", 10001);
+                 "Server startup time",
+                 startup_time_str,
+                 "Server uptime",
+                 uptime_string ? uptime_string : "Unknown - Out of memory");
+
+    if (uptime_string)
+        free (uptime_string);
 
     if (n < 0)
         return n;
 
-    // Same as above
+    n = fprintf (target, "PCP Clients:\n");
+    if (n < 0)
+        return n;
+
+    if (mappings)
+    {
+        for (elem = mappings; elem; elem = elem->next)
+        {
+            mapping = (pcp_mapping) elem->data;
+
+            n = write_mapping (mapping, target);
+
+            if (n < 0)
+                return n;
+        }
+    }
+    else
+    {
+        n = fprintf (target, "     There are no current mappings\n");
+        if (n < 0)
+            return n;
+    }
+
+    // TODO: Probably very similar to standard mappings
     n = fprintf (target,
                  "PCP Static Mappings:\n"
-                 "     %-36.35s: %s\n"
-                 "     %-36.35s: %d\n",
-                 "Server IP address", "something",
-                 "Server uptime", 12001);
+                 "     There are no current static mappings\n");
 
     return n;
 }
@@ -669,6 +759,14 @@ prefer_failure_req_rate_limit (u_int32_t rate)
     config.prefer_failure_req_rate_limit = rate;
 }
 
+void
+startup_epoch_time (u_int32_t startup_time)
+{
+    if (config.startup_epoch_time == startup_time)
+        return;
+    config.startup_epoch_time = startup_time;
+}
+
 static int
 mapping_index_cmp (gconstpointer _a, gconstpointer _b)
 {
@@ -932,6 +1030,7 @@ pcp_callbacks callbacks = {
     .prefer_failure_req_rate_limit = prefer_failure_req_rate_limit,
     .new_pcp_mapping = new_pcp_mapping,
     .delete_pcp_mapping = delete_pcp_mapping,
+    .startup_epoch_time = startup_epoch_time,
 };
 
 /**
@@ -952,8 +1051,11 @@ main (int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // apply default config if first time running, otherwise load current config
+    // Apply default config if first time running, otherwise load current config
     pcp_load_config ();
+
+    // Set the startup time
+    startup_epoch_time_set (time (NULL));
 
     print_pcp_apteryx_config (); // TODO: remove
 

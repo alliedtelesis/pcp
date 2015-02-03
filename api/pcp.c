@@ -24,9 +24,6 @@
 #define MAXIMUM_MAPPING_ID INT_MAX
 #endif
 
-/* ctime strings are exactly 26 characters with the format
- * "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n" */
-#define CTIME_BUF_SIZE 32
 
 #define ROOT_PATH "/pcp"
 
@@ -58,6 +55,7 @@
 #define MIN_MAPPING_LIFETIME_KEY "min_mapping_lifetime"
 #define MAX_MAPPING_LIFETIME_KEY "max_mapping_lifetime"
 #define PREFER_FAILURE_REQ_RATE_LIMIT_KEY "prefer_failure_req_rate_limit"
+#define STARTUP_EPOCH_TIME_KEY "startup_epoch_time"
 
 static pcp_callbacks *saved_cbs = NULL;
 static pthread_mutex_t callback_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -387,6 +385,8 @@ pcp_mapping_destroy (pcp_mapping mapping)
 bool
 pcp_load_config (void)
 {
+    bool ret;
+
     if (pcp_initialized_get ())
     {
         pthread_mutex_lock (&callback_lock);
@@ -430,14 +430,16 @@ pcp_load_config (void)
 
         pthread_mutex_unlock (&callback_lock);
 
-        return true;
+        ret = true;
     }
     else
     {
-        return (pcp_initialized_set (true) &&
+        ret = pcp_initialized_set (true) &&
                 pcp_enabled_set (true) &&
-                config_set_default ());
+                config_set_default ();
     }
+
+    return ret;
 }
 
 bool
@@ -560,6 +562,18 @@ prefer_failure_req_rate_limit_get (void)
     return (u_int32_t) apteryx_get_int (CONFIG_PATH, PREFER_FAILURE_REQ_RATE_LIMIT_KEY);
 }
 
+bool
+startup_epoch_time_set (u_int32_t startup_time)
+{
+    return apteryx_set_int (CONFIG_PATH, STARTUP_EPOCH_TIME_KEY, startup_time);
+}
+
+u_int32_t
+startup_epoch_time_get (void)
+{
+    return (u_int32_t) apteryx_get_int (CONFIG_PATH, STARTUP_EPOCH_TIME_KEY);
+}
+
 /**
  * @brief config_set_default - Reset all settings to their default settings,
  *          except the enabled setting to avoid shutting down the server.
@@ -582,6 +596,36 @@ config_set_default (void)
     {
         return false;
     }
+}
+
+/**
+ * @brief get_uptime_string - Return a memory allocated string containing the server's
+ *          uptime in a d:hh:mm:ss format.
+ * @return - The pointer to the string on success or NULL on failure.
+ */
+char *
+get_uptime_string (void)
+{
+    u_int32_t uptime = time (NULL) - startup_epoch_time_get ();
+    u_int32_t days;
+    u_int32_t hours;
+    u_int32_t minutes;
+    u_int32_t seconds;
+    char *uptime_string;
+
+    days = uptime / 86400;
+    uptime -= days * 86400;
+    hours = uptime / 3600;
+    uptime -= hours * 3600;
+    minutes = uptime / 60;
+    uptime -= minutes * 60;
+    seconds = uptime;
+
+    if (asprintf (&uptime_string, "%u:%02u:%02u:%02u", days, hours, minutes, seconds) < 0)
+    {
+        return NULL;
+    }
+    return uptime_string;
 }
 
 /************************
@@ -665,6 +709,13 @@ pcp_config_changed (const char *path, void *priv, const unsigned char *value,
             saved_cbs->prefer_failure_req_rate_limit (prefer_failure_req_rate_limit_get ());
         }
     }
+    else if (strcmp (key, STARTUP_EPOCH_TIME_KEY) == 0)
+    {
+        if (saved_cbs && saved_cbs->startup_epoch_time)
+        {
+            saved_cbs->startup_epoch_time (startup_epoch_time_get ());
+        }
+    }
     else if (strcmp (key, PCP_INITIALIZED_KEY) != 0)
     {
         // key does not match any known keys
@@ -674,7 +725,8 @@ pcp_config_changed (const char *path, void *priv, const unsigned char *value,
 
     pthread_mutex_unlock (&callback_lock);
 
-    puts ("config_changed");  // TODO: remove
+    puts ("config_changed");        // TODO: remove
+    print_pcp_apteryx_config ();    // TODO: remove
 
     return true;
 }
@@ -769,15 +821,31 @@ print_pcp_apteryx_config (void)
 
         if (strcmp (strrchr (path, '/') + 1, "config") == 0)
         {
-            printf ("    %s     %d\n", PCP_ENABLED_KEY, pcp_enabled_get());
-            printf ("    %s     %d\n", MAP_SUPPORT_KEY, map_support_get());
-            printf ("    %s     %d\n", PEER_SUPPORT_KEY, peer_support_get());
-            printf ("    %s     %d\n", THIRD_PARTY_SUPPORT_KEY, third_party_support_get());
-            printf ("    %s     %d\n", PROXY_SUPPORT_KEY, proxy_support_get());
-            printf ("    %s     %d\n", UPNP_IGD_PCP_IWF_SUPPORT_KEY, upnp_igd_pcp_iwf_support_get());
-            printf ("    %s     %u\n", MIN_MAPPING_LIFETIME_KEY, min_mapping_lifetime_get());
-            printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, max_mapping_lifetime_get());
-            printf ("    %s     %u\n", PREFER_FAILURE_REQ_RATE_LIMIT_KEY, prefer_failure_req_rate_limit_get());
+            char startup_time_str[TIME_BUF_SIZE];
+            time_t startup_epoch_time_t = (time_t) startup_epoch_time_get ();
+            struct tm *startup_time_tm = localtime (&startup_epoch_time_t);
+            char *uptime_string;
+
+            strftime (startup_time_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, startup_time_tm);
+
+            uptime_string = get_uptime_string ();
+
+            printf ("    %s     %d\n", PCP_ENABLED_KEY, pcp_enabled_get ());
+            printf ("    %s     %d\n", MAP_SUPPORT_KEY, map_support_get ());
+            printf ("    %s     %d\n", PEER_SUPPORT_KEY, peer_support_get ());
+            printf ("    %s     %d\n", THIRD_PARTY_SUPPORT_KEY, third_party_support_get ());
+            printf ("    %s     %d\n", PROXY_SUPPORT_KEY, proxy_support_get ());
+            printf ("    %s     %d\n", UPNP_IGD_PCP_IWF_SUPPORT_KEY, upnp_igd_pcp_iwf_support_get ());
+            printf ("    %s     %u\n", MIN_MAPPING_LIFETIME_KEY, min_mapping_lifetime_get ());
+            printf ("    %s     %u\n", MAX_MAPPING_LIFETIME_KEY, max_mapping_lifetime_get ());
+            printf ("    %s     %u\n", PREFER_FAILURE_REQ_RATE_LIMIT_KEY, prefer_failure_req_rate_limit_get ());
+            printf ("    %s     %u\n", STARTUP_EPOCH_TIME_KEY, startup_epoch_time_get ());
+            printf ("    %s     %s\n", "Formatted start time", startup_time_str);
+            printf ("    %s     %s\n", "Server uptime",
+                    uptime_string ? uptime_string : "Unknown - Out of memory");
+
+            if (uptime_string)
+                free (uptime_string);
         }
     }
     g_list_free_full (paths, free);
@@ -791,14 +859,17 @@ pcp_mapping_print (pcp_mapping mapping)
     {
         char internal_ip_str[INET6_ADDRSTRLEN];
         char external_ip_str[INET6_ADDRSTRLEN];
-        char start_of_life_str[CTIME_BUF_SIZE];
-        char end_of_life_str[CTIME_BUF_SIZE];
+        char start_of_life_str[TIME_BUF_SIZE];
+        char end_of_life_str[TIME_BUF_SIZE];
 
-        time_t start_of_life = (time_t) mapping->start_of_life;
-        time_t end_of_life = (time_t) mapping->end_of_life;
+        time_t start_of_life_time_t = (time_t) mapping->start_of_life;
+        time_t end_of_life_time_t = (time_t) mapping->end_of_life;
 
-        ctime_r (&start_of_life, start_of_life_str);
-        ctime_r (&end_of_life, end_of_life_str);
+        struct tm *start_of_life_tm = localtime (&start_of_life_time_t);
+        strftime (start_of_life_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, start_of_life_tm);
+
+        struct tm *end_of_life_tm = localtime (&end_of_life_time_t);
+        strftime (end_of_life_str, TIME_BUF_SIZE, DATE_TIME_FORMAT, end_of_life_tm);
 
         inet_ntop (AF_INET6, &(mapping->internal_ip.s6_addr), internal_ip_str, INET6_ADDRSTRLEN);
         inet_ntop (AF_INET6, &(mapping->external_ip.s6_addr), external_ip_str, INET6_ADDRSTRLEN);
@@ -809,8 +880,8 @@ pcp_mapping_print (pcp_mapping mapping)
                 "       %-19.18s: [%s]:%u\n"
                 "       %-19.18s: %u\n"
                 "       %-19.18s: %u\n"
-                "       %-19.18s: %s"
-                "       %-19.18s: %s"
+                "       %-19.18s: %s\n"
+                "       %-19.18s: %s\n"
                 "       %-19.18s: %u\n"
                 "         To remove later\n" // TODO: Remove later
                 "         %-17.16s: %s\n"

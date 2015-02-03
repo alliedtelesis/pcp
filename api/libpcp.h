@@ -15,6 +15,10 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#define TIME_BUF_SIZE 32
+// Format of Www Mmm dd hh:mm:ss yyyy
+#define DATE_TIME_FORMAT "%a %b %e %T %Y"
+
 #define PCP_VERSION 2
 #define RESPONSE_RESERVED_SIZE 3
 #define MAPPING_NONCE_SIZE 3
@@ -136,7 +140,13 @@ bool prefer_failure_req_rate_limit_set (u_int32_t rate);
 
 u_int32_t prefer_failure_req_rate_limit_get (void);
 
+bool startup_epoch_time_set (u_int32_t startup_time);
+
+u_int32_t startup_epoch_time_get (void);
+
 bool config_set_default (void);
+
+char *get_uptime_string (void);
 
 
 /************************
@@ -172,6 +182,9 @@ typedef struct _pcp_callbacks
 
     /** PREFER_FAILURE request rate limit has been changed */
     void (*prefer_failure_req_rate_limit) (u_int32_t rate);
+
+    /** Server has been restarted so refresh startup time */
+    void (*startup_epoch_time) (u_int32_t startup_time);
 
     /** New mapping has been added */
     void (*new_pcp_mapping) (int index,
