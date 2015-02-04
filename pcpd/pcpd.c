@@ -24,6 +24,7 @@
 #include "libpcp.h"
 #include "packets_pcp.h"
 #include "packets_pcp_serialization.h"
+#include "pcp_iptables.h"
 
 
 #define PCPD_PID_PATH "/var/run/pcpd.pid"
@@ -362,9 +363,11 @@ signal_handler (int signal)
     if (signal == SIGINT || signal == SIGTERM)
     {
         pthread_cancel (mapping_thread);
+        pcp_iptables_deinit ();
         pcp_register_cb (NULL);
         g_list_free_full (mappings, (GDestroyNotify) pcp_mapping_destroy);
         pcp_deinit ();
+
         exit (EXIT_SUCCESS);
     }
 }
@@ -445,8 +448,6 @@ setup_pcpd (void)
 
     setup_signal_handlers ();
 
-    signal (SIGCHLD, SIG_IGN);  // Take care of zombie processes
-
     sock = socket (AF_INET, SOCK_DGRAM, 0);
 
     check_error (sock, "Opening socket");
@@ -459,6 +460,8 @@ setup_pcpd (void)
 
     n = bind (sock, (struct sockaddr *) &server, length);
     check_error (n, "binding");
+
+    pcp_iptables_init ();
 
     return sock;
 }

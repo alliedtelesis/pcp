@@ -1,6 +1,6 @@
 PCP_ROOT ?= ../
 
-SRC_C := pcpd.c packets_pcp.c packets_pcp_serialization.c
+SRC_C := pcpd.c packets_pcp.c packets_pcp_serialization.c pcp_iptables.c
 
 EXTRA_CFLAGS = -I. `$(PKG_CONFIG) --cflags glib-2.0` -I../api
 EXTRA_CFLAGS += -I$(CROSS_DEV_ROOT_DIR)/usr/include/glib-2.0
