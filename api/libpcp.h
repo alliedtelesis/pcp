@@ -70,6 +70,8 @@ struct in6_addr apteryx_get_ipv6_addr (const char *path, const char *key);
 
 /* Mappings */
 
+int next_mapping_id (void);
+
 bool // TODO: Decide if bool or enum of error types
 pcp_mapping_add (int index,
                  u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],

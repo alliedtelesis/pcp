@@ -166,6 +166,12 @@ next_highest_id (const char *path)
     return index;
 }
 
+int
+next_mapping_id (void)
+{
+    return next_highest_id (MAPPING_PATH "/");
+}
+
 bool // TODO: Decide if bool or enum of error types
 pcp_mapping_add (int index,
                  u_int32_t mapping_nonce[MAPPING_NONCE_SIZE],
@@ -183,7 +189,7 @@ pcp_mapping_add (int index,
 
     if (index == -1)
     {
-        index = next_highest_id (MAPPING_PATH "/");
+        index = next_mapping_id ();
         if (index < 0)
         {
             return false;   // Invalid index

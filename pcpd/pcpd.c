@@ -45,6 +45,7 @@ typedef enum
     EXTEND_MAPPING_SUCCESS,
     EXTEND_MAPPING_FAILED,
     INVALID_MAPPING_REQUEST,
+    IPV6_UNSUPPORTED,       // TODO: Remove once implemented
     // TODO: Other cases e.g. no resources, excessive peers, network failure, etc.
 } create_mapping_result;
 
@@ -514,58 +515,105 @@ find_mapping_by_request (map_request *map_req)
 }
 
 create_mapping_result
+process_existing_mapping (pcp_mapping mapping, map_response *map_resp)
+{
+    u_int32_t new_lifetime;
+    u_int32_t new_end_of_life;
+    create_mapping_result ret = EXTEND_MAPPING_SUCCESS;
+
+    // Extend the existing mapping's lifetime by the validated lifetime currently stored in the response
+    new_lifetime = map_resp->header.lifetime;
+    new_end_of_life = time (NULL) + new_lifetime;
+
+    if (new_lifetime == 0)
+    {
+        ret = pcp_mapping_delete (mapping->index) ? DELETE_MAPPING_SUCCESS : DELETE_MAPPING_FAILED;
+    }
+    else if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
+    {
+        mapping->lifetime = new_lifetime;
+        mapping->end_of_life = new_end_of_life;
+
+        // Put the existing mapping's external IP:port into the response
+        map_resp->assigned_external_ip = mapping->external_ip;
+        map_resp->assigned_external_port = mapping->external_port;
+    }
+    else
+    {
+        ret = EXTEND_MAPPING_FAILED;
+    }
+
+    usleep (25 * 1000);         // Give apteryx and callbacks time to run
+    puts("MAPPING EXISTS");     // TODO: remove
+    print_mappings_debug ();    // TODO: remove
+
+    return ret;
+}
+
+create_mapping_result
 create_mapping (map_response *map_resp, map_request *map_req)
 {
     pcp_mapping mapping;
-    u_int32_t new_lifetime;
-    u_int32_t new_end_of_life;
     create_mapping_result ret = CREATE_MAPPING_SUCCESS;
+    int index;
 
     mapping = find_mapping_by_request (map_req);
     if (mapping)
     {
-        // Extend the existing mapping's lifetime by the validated lifetime currently stored in the response
-        new_lifetime = map_resp->header.lifetime;
-        new_end_of_life = time (NULL) + new_lifetime;
-
-        if (new_lifetime == 0)
-        {
-            ret = pcp_mapping_delete (mapping->index) ? DELETE_MAPPING_SUCCESS : DELETE_MAPPING_FAILED;
-        }
-        else if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
-        {
-            mapping->lifetime = new_lifetime;
-            mapping->end_of_life = new_end_of_life;
-
-            // Put the existing mapping's external IP:port into the response
-            map_resp->assigned_external_ip = mapping->external_ip;
-            map_resp->assigned_external_port = mapping->external_port;
-
-            ret = EXTEND_MAPPING_SUCCESS;
-        }
-        else
-        {
-            ret = EXTEND_MAPPING_FAILED;
-        }
-
-        usleep (25 * 1000);         // Give apteryx and callbacks time to run
-        puts("MAPPING EXISTS");     // TODO: remove
-        print_mappings_debug ();    // TODO: remove
+        ret = process_existing_mapping (mapping, map_resp);
     }
     else
     {
         /* TODO:
          * - Make mapping using values from the struct
          * - Get info of mapping if successful, like assigned lifetime, ext port and ext ip address
+         *    (may be different to requested values)
          * - Set result_code based on result
          * Below are temporary values for these variables
          */
 //        map_resp->header.lifetime = 9001;       // Lifetime of mapping or expected lifetime of resulting error
 //        map_resp->header.lifetime = 10;         // Short lifetime to test the lifetime check thread
-        map_resp->assigned_external_port = 4321;
-        struct in6_addr temp_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
-                                        0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
-        map_resp->assigned_external_ip = temp_ip;
+//        map_resp->assigned_external_port = 4321;
+//        struct in6_addr temp_ip = { { { 0x80, 0xfe, 0, 0, 0, 0, 0, 0,
+//                                        0x20, 0x20, 0xff, 0x3b, 0x2e, 0xef, 0x38, 0x29 } } };
+//        map_resp->assigned_external_ip = temp_ip;
+
+        struct in_addr temp_int_ip = { 0 };
+        struct in_addr temp_ext_ip = { 0 };
+
+        if (is_ipv4_mapped_ipv6_addr (&(map_req->header.client_ip)) &&
+                is_ipv4_mapped_ipv6_addr (&(map_resp->assigned_external_ip)))
+        {
+                temp_int_ip = convert_ipv6_to_ipv4 (&(map_req->header.client_ip));
+                temp_ext_ip = convert_ipv6_to_ipv4 (&(map_resp->assigned_external_ip));
+
+                index = next_mapping_id ();
+
+                if (write_pcp_port_forwarding_chain (index,
+                                                     temp_int_ip,
+                                                     temp_ext_ip,
+                                                     map_req->internal_port,
+                                                     map_resp->assigned_external_port,
+                                                     map_resp->protocol) == 0)
+                {
+                    // Store the new mapping
+                    pcp_mapping_add (index,
+                                     map_resp->mapping_nonce,
+                                     &(map_req->header.client_ip),
+                                     map_resp->internal_port,
+                                     &(map_resp->assigned_external_ip),
+                                     map_resp->assigned_external_port,
+                                     map_resp->header.lifetime,
+                                     OPCODE (map_resp->header.r_opcode),
+                                     map_resp->protocol);
+
+                    print_mappings_debug (); // TODO: remove
+                }
+        }
+        else
+        {
+            ret = IPV6_UNSUPPORTED;
+        }
     }
     return ret;
 }
@@ -643,7 +691,6 @@ process_map_request (unsigned char *pkt_buf)
     unsigned char *ptr;
     map_request *map_req;
     map_response *map_resp;
-    int mapping_index;
     create_mapping_result mapping_result;
 
     map_req = deserialize_map_request (pkt_buf);
@@ -653,30 +700,21 @@ process_map_request (unsigned char *pkt_buf)
     map_resp->header.lifetime = get_valid_lifetime (map_resp->header.lifetime);
     mapping_result = create_mapping (map_resp, map_req);
 
-    if (mapping_result == CREATE_MAPPING_SUCCESS)
-    {
-        // Add a new mapping
-        mapping_index = -1;     // Next highest index
-        pcp_mapping_add (mapping_index,
-                         map_resp->mapping_nonce,
-                         &(map_req->header.client_ip),
-                         map_resp->internal_port,
-                         &map_resp->assigned_external_ip,
-                         map_resp->assigned_external_port,
-                         map_resp->header.lifetime,
-                         OPCODE (map_resp->header.r_opcode),
-                         map_resp->protocol);
-
-        print_mappings_debug (); // TODO: remove
-    }
-    else if (mapping_result == EXTEND_MAPPING_FAILED ||
-             mapping_result == DELETE_MAPPING_FAILED)
+    if (mapping_result == EXTEND_MAPPING_FAILED ||
+        mapping_result == DELETE_MAPPING_FAILED)
     {
         map_resp->header.result_code = NO_RESOURCES;
         map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);
     }
     else if (mapping_result == INVALID_MAPPING_REQUEST)
     {
+        map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);
+    }
+    else if (mapping_result == IPV6_UNSUPPORTED)
+    {
+        /* Temporary result code. Actually unsupp IP type since ipv6 unsupported
+         * at this time but this doesn't exist in RFC. */
+        map_resp->header.result_code = UNSUPP_PROTOCOL;
         map_resp->header.lifetime = get_error_lifetime (map_resp->header.result_code);
     }
 
