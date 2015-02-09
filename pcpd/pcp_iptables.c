@@ -242,6 +242,27 @@ flush_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain_
     return true;
 }
 
+/* Delete the chains */
+static bool
+delete_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain_mangle)
+{
+    char cmd_preroute[IPT_BUF_SIZE] = { '\0' };
+    char cmd_postroute[IPT_BUF_SIZE] = { '\0' };
+    char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
+
+    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -X %s", chain_preroute) < 0 ||
+        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -X %s", chain_postroute) < 0 ||
+        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -X %s", chain_mangle) < 0)
+    {
+        return false;
+    }
+    send_iptables_cmd (cmd_preroute, IPV4_ONLY);
+    send_iptables_cmd (cmd_postroute, IPV4_ONLY);
+    send_iptables_cmd (cmd_mangle, IPV4_ONLY);
+
+    return true;
+}
+
 /* Add jumps to the chains for the new mapping - assuming PCP is enabled */
 static bool
 append_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain_mangle)
@@ -258,6 +279,33 @@ append_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *
                   chain_postroute) < 0 ||
         snprintf (cmd_mangle, IPT_BUF_SIZE,
                   "-t mangle -A " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  chain_mangle) < 0)
+    {
+        return false;
+    }
+    send_iptables_cmd (cmd_preroute, IPV4_ONLY);
+    send_iptables_cmd (cmd_postroute, IPV4_ONLY);
+    send_iptables_cmd (cmd_mangle, IPV4_ONLY);
+
+    return true;
+}
+
+/* Remove jumps to the chains for a mapping */
+static bool
+remove_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain_mangle)
+{
+    char cmd_preroute[IPT_BUF_SIZE] = { '\0' };
+    char cmd_postroute[IPT_BUF_SIZE] = { '\0' };
+    char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
+
+    if (snprintf (cmd_preroute, IPT_BUF_SIZE,
+                  "-t nat -D " PCP_PREROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  chain_preroute) < 0 ||
+        snprintf (cmd_postroute, IPT_BUF_SIZE,
+                  "-t nat -D " PCP_POSTROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  chain_postroute) < 0 ||
+        snprintf (cmd_mangle, IPT_BUF_SIZE,
+                  "-t mangle -D " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
                   chain_mangle) < 0)
     {
         return false;
@@ -442,6 +490,47 @@ write_pcp_port_forwarding_chain (int index,
     if (!int_to_ext_pcp_rule (chain_postroute, chain_mangle,
                               internal_ip_str, external_ip_str,
                               internal_port, external_port, protocol))
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * Remove the chains for a mapping of the given index from the PCP iptables chains
+ * @param index - The rule ID
+ * @return 0 on success, else -1
+ */
+int
+remove_pcp_port_forwarding_chain (int index)
+{
+    char chain_preroute[IPT_BUF_SIZE] = { '\0' };
+    char chain_postroute[IPT_BUF_SIZE] = { '\0' };
+    char chain_mangle[IPT_BUF_SIZE] = { '\0' };
+
+    /* Form the names of the chains */
+    if (snprintf (chain_preroute, IPT_BUF_SIZE, PCP_PREROUTING_RULE_FORMAT, index) < 0 ||
+        snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) < 0 ||
+        snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) < 0)
+    {
+        return -1;
+    }
+
+    /* Remove jumps to the chains for the mapping */
+    if (!remove_jump_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
+    {
+        return -1;
+    }
+
+    /* Flush the chains */
+    if (!flush_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
+    {
+        return -1;
+    }
+
+    /* Delete the chains */
+    if (!delete_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
         return -1;
     }

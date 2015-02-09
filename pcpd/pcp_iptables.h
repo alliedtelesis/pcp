@@ -20,4 +20,6 @@ int write_pcp_port_forwarding_chain (int index,
                                      u_int16_t external_port,
                                      u_int16_t protocol);
 
+int remove_pcp_port_forwarding_chain (int index);
+
 #endif /* PCP_IPTABLES_H */

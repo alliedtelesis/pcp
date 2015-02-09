@@ -527,7 +527,16 @@ process_existing_mapping (pcp_mapping mapping, map_response *map_resp)
 
     if (new_lifetime == 0)
     {
-        ret = pcp_mapping_delete (mapping->index) ? DELETE_MAPPING_SUCCESS : DELETE_MAPPING_FAILED;
+        if (remove_pcp_port_forwarding_chain (mapping->index) == 0 &&
+                pcp_mapping_delete (mapping->index))
+        {
+            ret = DELETE_MAPPING_SUCCESS;
+        }
+        else
+        {
+            syslog (LOG_ERR, "Could not delete mapping with ID %d", mapping->index);
+            ret = DELETE_MAPPING_FAILED;
+        }
     }
     else if (pcp_mapping_refresh_lifetime (mapping->index, new_lifetime, new_end_of_life))
     {
@@ -540,6 +549,7 @@ process_existing_mapping (pcp_mapping mapping, map_response *map_resp)
     }
     else
     {
+        syslog (LOG_ERR, "Could not extend mapping lifetime with ID %d", mapping->index);
         ret = EXTEND_MAPPING_FAILED;
     }
 
@@ -608,6 +618,14 @@ create_mapping (map_response *map_resp, map_request *map_req)
                                      map_resp->protocol);
 
                     print_mappings_debug (); // TODO: remove
+                }
+                else
+                {
+                    syslog (LOG_ERR,
+                            "Could not add new mapping with nonce [%u %u %u]",
+                            map_resp->mapping_nonce[0],
+                            map_resp->mapping_nonce[1],
+                            map_resp->mapping_nonce[2]);
                 }
         }
         else
@@ -1032,10 +1050,16 @@ check_mapping_lifetimes (void *arg)
 
             if (pcp_mapping_remaining_lifetime_get (mapping) == 0)
             {
-                pcp_mapping_delete (mapping->index);
-
-                deleted = true; // TODO: remove
-                count++;        // TODO: remove
+                if (remove_pcp_port_forwarding_chain (mapping->index) == 0 &&
+                        pcp_mapping_delete (mapping->index))
+                {
+                    deleted = true; // TODO: remove
+                    count++;        // TODO: remove
+                }
+                else
+                {
+                    syslog (LOG_ERR, "Could not delete mapping with ID %d", mapping->index);
+                }
             }
         }
 
