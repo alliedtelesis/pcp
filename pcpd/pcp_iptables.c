@@ -50,7 +50,7 @@ send_iptables_cmd (const char *cmd, PCP_CMD_TYPE family)
 
     if (family != IPV4_ONLY)
     {
-        if (snprintf (tmp, IPT_BUF_SIZE, "%s %s", IP6TABLES_CMD, cmd) < 0)
+        if (snprintf (tmp, IPT_BUF_SIZE, "%s %s", IP6TABLES_CMD, cmd) <= 0)
         {
             return false;
         }
@@ -63,7 +63,7 @@ send_iptables_cmd (const char *cmd, PCP_CMD_TYPE family)
     }
     if (family != IPV6_ONLY)
     {
-        if (snprintf (tmp, IPT_BUF_SIZE, "%s %s", IP4TABLES_CMD, cmd) < 0)
+        if (snprintf (tmp, IPT_BUF_SIZE, "%s %s", IP4TABLES_CMD, cmd) <= 0)
         {
             return false;
         }
@@ -208,9 +208,9 @@ create_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain
     char cmd_postroute[IPT_BUF_SIZE] = { '\0' };
     char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
 
-    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -N %s", chain_preroute) < 0 ||
-        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -N %s", chain_postroute) < 0 ||
-        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -N %s", chain_mangle) < 0)
+    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -N %s", chain_preroute) <= 0 ||
+        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -N %s", chain_postroute) <= 0 ||
+        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -N %s", chain_mangle) <= 0)
     {
         return false;
     }
@@ -229,9 +229,9 @@ flush_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain_
     char cmd_postroute[IPT_BUF_SIZE] = { '\0' };
     char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
 
-    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -F %s", chain_preroute) < 0 ||
-        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -F %s", chain_postroute) < 0 ||
-        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -F %s", chain_mangle) < 0)
+    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -F %s", chain_preroute) <= 0 ||
+        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -F %s", chain_postroute) <= 0 ||
+        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -F %s", chain_mangle) <= 0)
     {
         return false;
     }
@@ -250,9 +250,9 @@ delete_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *chain
     char cmd_postroute[IPT_BUF_SIZE] = { '\0' };
     char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
 
-    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -X %s", chain_preroute) < 0 ||
-        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -X %s", chain_postroute) < 0 ||
-        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -X %s", chain_mangle) < 0)
+    if (snprintf (cmd_preroute, IPT_BUF_SIZE, "-t nat -X %s", chain_preroute) <= 0 ||
+        snprintf (cmd_postroute, IPT_BUF_SIZE, "-t nat -X %s", chain_postroute) <= 0 ||
+        snprintf (cmd_mangle, IPT_BUF_SIZE, "-t mangle -X %s", chain_mangle) <= 0)
     {
         return false;
     }
@@ -273,13 +273,13 @@ append_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *
 
     if (snprintf (cmd_preroute, IPT_BUF_SIZE,
                   "-t nat -A " PCP_PREROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_preroute) < 0 ||
+                  chain_preroute) <= 0 ||
         snprintf (cmd_postroute, IPT_BUF_SIZE,
                   "-t nat -A " PCP_POSTROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_postroute) < 0 ||
+                  chain_postroute) <= 0 ||
         snprintf (cmd_mangle, IPT_BUF_SIZE,
                   "-t mangle -A " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_mangle) < 0)
+                  chain_mangle) <= 0)
     {
         return false;
     }
@@ -300,13 +300,13 @@ remove_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *
 
     if (snprintf (cmd_preroute, IPT_BUF_SIZE,
                   "-t nat -D " PCP_PREROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_preroute) < 0 ||
+                  chain_preroute) <= 0 ||
         snprintf (cmd_postroute, IPT_BUF_SIZE,
                   "-t nat -D " PCP_POSTROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_postroute) < 0 ||
+                  chain_postroute) <= 0 ||
         snprintf (cmd_mangle, IPT_BUF_SIZE,
                   "-t mangle -D " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
-                  chain_mangle) < 0)
+                  chain_mangle) <= 0)
     {
         return false;
     }
@@ -371,11 +371,11 @@ ext_to_int_pcp_rule (char *chain_preroute,
     if (snprintf
             (cmd_preroute, IPT_BUF_SIZE,
              "-t nat -A %s -d %s %s -j DNAT --to-destination %s:%u",
-             chain_preroute, external_ip_str, protocol_port_str, internal_ip_str, internal_port) < 0 ||
+             chain_preroute, external_ip_str, protocol_port_str, internal_ip_str, internal_port) <= 0 ||
         snprintf
             (cmd_mangle, IPT_BUF_SIZE,
              "-t mangle -A %s -d %s %s -j CONNMARK --set-mark 1/0x7",
-             chain_mangle, external_ip_str, protocol_port_str) < 0)
+             chain_mangle, external_ip_str, protocol_port_str) <= 0)
     {
         return false;
     }
@@ -408,11 +408,11 @@ int_to_ext_pcp_rule (char *chain_postroute,
     if (snprintf
             (cmd_postroute, IPT_BUF_SIZE,
              "-t nat -A %s -s %s %s -j SNAT --to-source %s:%u",
-             chain_postroute, internal_ip_str, protocol_port_str, external_ip_str, external_port) < 0 ||
+             chain_postroute, internal_ip_str, protocol_port_str, external_ip_str, external_port) <= 0 ||
         snprintf
             (cmd_mangle, IPT_BUF_SIZE,
              "-t mangle -A %s -s %s %s -j CONNMARK --set-mark 1/0x7",
-             chain_mangle, internal_ip_str, protocol_port_str) < 0)
+             chain_mangle, internal_ip_str, protocol_port_str) <= 0)
     {
         return false;
     }
@@ -453,9 +453,9 @@ write_pcp_port_forwarding_chain (int index,
     }
 
     /* Form the names of the chains */
-    if (snprintf (chain_preroute, IPT_BUF_SIZE, PCP_PREROUTING_RULE_FORMAT, index) < 0 ||
-        snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) < 0 ||
-        snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) < 0)
+    if (snprintf (chain_preroute, IPT_BUF_SIZE, PCP_PREROUTING_RULE_FORMAT, index) <= 0 ||
+        snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) <= 0 ||
+        snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) <= 0)
     {
         return -1;
     }
@@ -510,9 +510,9 @@ remove_pcp_port_forwarding_chain (int index)
     char chain_mangle[IPT_BUF_SIZE] = { '\0' };
 
     /* Form the names of the chains */
-    if (snprintf (chain_preroute, IPT_BUF_SIZE, PCP_PREROUTING_RULE_FORMAT, index) < 0 ||
-        snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) < 0 ||
-        snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) < 0)
+    if (snprintf (chain_preroute, IPT_BUF_SIZE, PCP_PREROUTING_RULE_FORMAT, index) <= 0 ||
+        snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) <= 0 ||
+        snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) <= 0)
     {
         return -1;
     }
