@@ -272,10 +272,10 @@ append_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *
     char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
 
     if (snprintf (cmd_preroute, IPT_BUF_SIZE,
-                  "-t nat -A " PCP_PREROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  "-t nat -A " PCP_PREROUTING_CHAIN " -m connmark --mark 1/0x7 -j %s",
                   chain_preroute) <= 0 ||
         snprintf (cmd_postroute, IPT_BUF_SIZE,
-                  "-t nat -A " PCP_POSTROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  "-t nat -A " PCP_POSTROUTING_CHAIN " -m connmark --mark 1/0x7 -j %s",
                   chain_postroute) <= 0 ||
         snprintf (cmd_mangle, IPT_BUF_SIZE,
                   "-t mangle -A " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
@@ -299,10 +299,10 @@ remove_jump_pcp_rule_chains (char *chain_preroute, char *chain_postroute, char *
     char cmd_mangle[IPT_BUF_SIZE] = { '\0' };
 
     if (snprintf (cmd_preroute, IPT_BUF_SIZE,
-                  "-t nat -D " PCP_PREROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  "-t nat -D " PCP_PREROUTING_CHAIN " -m connmark --mark 1/0x7 -j %s",
                   chain_preroute) <= 0 ||
         snprintf (cmd_postroute, IPT_BUF_SIZE,
-                  "-t nat -D " PCP_POSTROUTING_CHAIN " -m connmark --mark 0/0x7 -j %s",
+                  "-t nat -D " PCP_POSTROUTING_CHAIN " -m connmark --mark 1/0x7 -j %s",
                   chain_postroute) <= 0 ||
         snprintf (cmd_mangle, IPT_BUF_SIZE,
                   "-t mangle -D " PCP_MANGLE_CHAIN " -m connmark --mark 0/0x7 -j %s",
