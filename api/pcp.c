@@ -1,7 +1,9 @@
 /**
  * @file pcp.c
  *
- * Implementation of pcpd API
+ * Implementation of the pcpd API. It manages pcpd data stored in the
+ * Apteryx database and can register callback functions which are
+ * called when data in a watched Apteryx path changes.
  *
  * Copyright 2015 Allied Telesis Labs, New Zealand
  *
@@ -11,12 +13,12 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
-
+ *
  * pcpd is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with pcpd.  If not, see <http://www.gnu.org/licenses/>.
  *

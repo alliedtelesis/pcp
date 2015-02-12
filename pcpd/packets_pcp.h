@@ -1,7 +1,27 @@
 /**
- * Contains constants, structs, enums and function definitions.
- * Packet formats are as specified in RFC6887 - PCP.
+ * @file packets_pcp.h
+ *
+ * Contains constants, structs, enums and packet function definitions.
+ * Packet formats are as specified in RFC6887 - Port Control Protocol.
  * http://tools.ietf.org/html/rfc6887
+ *
+ * Copyright 2015 Allied Telesis Labs, New Zealand
+ *
+ * This file is part of pcpd.
+ *
+ * pcpd is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * pcpd is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with pcpd.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 #ifndef PACKETS_PCP_H
