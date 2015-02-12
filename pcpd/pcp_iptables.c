@@ -429,12 +429,12 @@ int_to_ext_pcp_rule (char *chain_postroute,
  * @param application   The name of the application entity
  * @param from          The name of the source entity
  * @param to            The name of the destination entity
- * @return 0 on success, else -1
+ * @return - True on success, else false
  */
-int
+bool
 write_pcp_port_forwarding_chain (int index,
-                                 struct in_addr internal_ip,
-                                 struct in_addr external_ip,
+                                 struct in_addr *internal_ip,
+                                 struct in_addr *external_ip,
                                  u_int16_t internal_port,
                                  u_int16_t external_port,
                                  u_int16_t protocol)
@@ -446,10 +446,10 @@ write_pcp_port_forwarding_chain (int index,
     char internal_ip_str[INET_ADDRSTRLEN] = { '\0' };
     char external_ip_str[INET_ADDRSTRLEN] = { '\0' };
 
-    if (!inet_ntop (AF_INET, &(internal_ip), internal_ip_str, INET_ADDRSTRLEN) ||
-        !inet_ntop (AF_INET, &(external_ip), external_ip_str, INET_ADDRSTRLEN))
+    if (!inet_ntop (AF_INET, internal_ip, internal_ip_str, INET_ADDRSTRLEN) ||
+        !inet_ntop (AF_INET, external_ip, external_ip_str, INET_ADDRSTRLEN))
     {
-        return -1;
+        return false;
     }
 
     /* Form the names of the chains */
@@ -457,25 +457,25 @@ write_pcp_port_forwarding_chain (int index,
         snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) <= 0 ||
         snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) <= 0)
     {
-        return -1;
+        return false;
     }
 
     /* Create the chains in the correct tables */
     if (!create_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
     /* Flush the chains */
     if (!flush_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
     /* Add jumps to the chains for the new mapping - assuming PCP is enabled */
     if (!append_jump_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
     /* Create port forwarding from external to internal and mark as allowed */
@@ -483,7 +483,7 @@ write_pcp_port_forwarding_chain (int index,
                               internal_ip_str, external_ip_str,
                               internal_port, external_port, protocol))
     {
-        return -1;
+        return false;
     }
 
     /* Create port forwarding from internal to external and mark as allowed */
@@ -491,18 +491,18 @@ write_pcp_port_forwarding_chain (int index,
                               internal_ip_str, external_ip_str,
                               internal_port, external_port, protocol))
     {
-        return -1;
+        return false;
     }
 
-    return 0;
+    return true;
 }
 
 /**
  * Remove the chains for a mapping of the given index from the PCP iptables chains
  * @param index - The rule ID
- * @return 0 on success, else -1
+ * @return - True on success, else false
  */
-int
+bool
 remove_pcp_port_forwarding_chain (int index)
 {
     char chain_preroute[IPT_BUF_SIZE] = { '\0' };
@@ -514,26 +514,26 @@ remove_pcp_port_forwarding_chain (int index)
         snprintf (chain_postroute, IPT_BUF_SIZE, PCP_POSTROUTING_RULE_FORMAT, index) <= 0 ||
         snprintf (chain_mangle, IPT_BUF_SIZE, PCP_MANGLE_RULE_FORMAT, index) <= 0)
     {
-        return -1;
+        return false;
     }
 
     /* Remove jumps to the chains for the mapping */
     if (!remove_jump_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
     /* Flush the chains */
     if (!flush_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
     /* Delete the chains */
     if (!delete_pcp_rule_chains (chain_preroute, chain_postroute, chain_mangle))
     {
-        return -1;
+        return false;
     }
 
-    return 0;
+    return true;
 }

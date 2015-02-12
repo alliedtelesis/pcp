@@ -350,6 +350,31 @@ create_pcpd_pid_file (void)
     }
 }
 
+static void
+exit_pcpd (void)
+{
+    GList *elem;
+    pcp_mapping mapping = NULL;
+
+    pthread_cancel (mapping_thread);
+
+    /* Deregister callback (perform callback delete functions manually to avoid possibly
+     * exiting pcpd before callbacks successfully execute) */
+    pcp_register_cb (NULL);
+
+    for (elem = mappings; elem; elem = elem->next)
+    {
+        mapping = (pcp_mapping) elem->data;
+        remove_pcp_port_forwarding_chain (mapping->index);
+    }
+
+    pcp_iptables_deinit ();
+    g_list_free_full (mappings, (GDestroyNotify) pcp_mapping_destroy);
+    pcp_deinit ();
+
+    exit (EXIT_SUCCESS);
+}
+
 /**
  * @brief signal_handler - Signal handler that reloads the configuration or writes show output.
  * @param signal - The received signal
@@ -363,13 +388,7 @@ signal_handler (int signal)
     }
     if (signal == SIGINT || signal == SIGTERM)
     {
-        pthread_cancel (mapping_thread);
-        pcp_iptables_deinit ();
-        pcp_register_cb (NULL);
-        g_list_free_full (mappings, (GDestroyNotify) pcp_mapping_destroy);
-        pcp_deinit ();
-
-        exit (EXIT_SUCCESS);
+        exit_pcpd ();
     }
 }
 
@@ -527,8 +546,7 @@ process_existing_mapping (pcp_mapping mapping, map_response *map_resp)
 
     if (new_lifetime == 0)
     {
-        if (remove_pcp_port_forwarding_chain (mapping->index) == 0 &&
-                pcp_mapping_delete (mapping->index))
+        if (pcp_mapping_delete (mapping->index))
         {
             ret = DELETE_MAPPING_SUCCESS;
         }
@@ -599,12 +617,15 @@ create_mapping (map_response *map_resp, map_request *map_req)
 
                 index = next_mapping_id ();
 
+                /* TODO: Move writing chain to callback function. Probably easier to do
+                 * once ip6tables is implemented (Only call add function then do
+                 * IPv6 to IPv4 conversion only if required in the write chain function) */
                 if (write_pcp_port_forwarding_chain (index,
-                                                     temp_int_ip,
-                                                     temp_ext_ip,
+                                                     &temp_int_ip,
+                                                     &temp_ext_ip,
                                                      map_req->internal_port,
                                                      map_resp->assigned_external_port,
-                                                     map_resp->protocol) == 0)
+                                                     map_resp->protocol))
                 {
                     // Store the new mapping
                     pcp_mapping_add (index,
@@ -897,6 +918,11 @@ pcp_mapping_get (int index)
 void
 delete_pcp_mapping (int index)
 {
+    if (!remove_pcp_port_forwarding_chain (index))
+    {
+        syslog (LOG_ERR, "Removing mapping of index %d failed", index);
+    }
+
     pthread_mutex_lock (&mapping_lock);
 
     pcp_mapping mapping = pcp_mapping_get (index);
@@ -1050,8 +1076,7 @@ check_mapping_lifetimes (void *arg)
 
             if (pcp_mapping_remaining_lifetime_get (mapping) == 0)
             {
-                if (remove_pcp_port_forwarding_chain (mapping->index) == 0 &&
-                        pcp_mapping_delete (mapping->index))
+                if (pcp_mapping_delete (mapping->index))
                 {
                     deleted = true; // TODO: remove
                     count++;        // TODO: remove
