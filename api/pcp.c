@@ -81,9 +81,6 @@ void
 pcp_init (void)
 {
     apteryx_init (false);
-    apteryx_set_string (ROOT_PATH, NULL, "-");
-    apteryx_set_string (CONFIG_PATH, NULL, "-");
-    apteryx_set_string (MAPPING_PATH, NULL, "-");
 }
 
 void
@@ -103,7 +100,7 @@ pcp_deinit_hard (void)
 bool
 apteryx_set_ipv6_addr (const char *path, const char *key, struct in6_addr value)
 {
-    char *full_path;
+    char *full_path, addr_string[64];
     size_t len;
     bool res = false;
 
@@ -114,7 +111,9 @@ apteryx_set_ipv6_addr (const char *path, const char *key, struct in6_addr value)
         len = asprintf (&full_path, "%s", path);
     if (len)
     {
-        res = apteryx_set (full_path, value.s6_addr, sizeof (struct in6_addr));
+        // Convert binary struct data to IPv6 address string
+        inet_ntop (AF_INET6, &value.s6_addr, addr_string, INET6_ADDRSTRLEN);
+        res = apteryx_set (full_path, addr_string);
         free (full_path);
     }
     return res;
@@ -124,8 +123,8 @@ struct in6_addr
 apteryx_get_ipv6_addr (const char *path, const char *key)
 {
     char *full_path;
+    char *v = NULL;
     size_t len;
-    unsigned char *v = NULL;
     struct in6_addr value;
 
     /* Create full path */
@@ -135,9 +134,10 @@ apteryx_get_ipv6_addr (const char *path, const char *key)
         len = asprintf (&full_path, "%s", path);
     if (len)
     {
-        if (apteryx_get (full_path, &v, &len) && v)
+        if ((v = apteryx_get_string (full_path, NULL)) != NULL)
         {
-            memcpy (value.s6_addr, v, sizeof (struct in6_addr));
+            // Convert IPv6 address string to binary (struct data)
+            inet_pton (AF_INET6, v, &value.s6_addr);
             free (v);
         }
         free (full_path);
@@ -240,7 +240,7 @@ pcp_mapping_add (int index,
     apteryx_set_int (path, END_OF_LIFE_KEY, time (NULL) + lifetime);
     apteryx_set_int (path, OPCODE_KEY, opcode);
     apteryx_set_int (path, PROTOCOL_KEY, protocol);
-    apteryx_set_string (path, NULL, "-");
+    apteryx_set (path, "-");
 
     free (path);
 
@@ -316,7 +316,6 @@ bool
 pcp_mapping_deleteall (void)
 {
     bool status = apteryx_prune (MAPPING_PATH);
-    apteryx_set_string (MAPPING_PATH, NULL, "-");
     return status;
 }
 
@@ -656,8 +655,7 @@ get_uptime_string (void)
  *************************/
 
 bool
-pcp_config_changed (const char *path, void *priv, const unsigned char *value,
-                         size_t len)
+pcp_config_changed (const char *path, void *priv, const char *value)
 {
     const char *key = NULL;
 
@@ -755,8 +753,7 @@ pcp_config_changed (const char *path, void *priv, const unsigned char *value,
 }
 
 bool
-pcp_mapping_changed (const char *path, void *priv, const unsigned char *value,
-                   size_t len)
+pcp_mapping_changed (const char *path, void *priv, const char *value)
 {
     char *tmp = NULL;
     int mapping_id = -1;
