@@ -60,6 +60,7 @@ struct pcp_callback_flags
 
 struct pcp_callback_flags cb_flags = { 0 };
 
+#if 0
 int
 set_up (void)
 {
@@ -914,6 +915,7 @@ test_pcp_mapping_changed_callback_delete_duplicate (void)
     NP_ASSERT_EQUAL (cb_flags.mapping_count, 0);
     compare_mapping_counts ();
 }
+#endif
 
 int
 tear_down (void)
