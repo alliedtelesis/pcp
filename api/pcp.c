@@ -655,7 +655,7 @@ get_uptime_string (void)
  *************************/
 
 bool
-pcp_config_changed (const char *path, void *priv, const char *value)
+pcp_config_changed (const char *path, const char *value)
 {
     const char *key = NULL;
 
@@ -753,7 +753,7 @@ pcp_config_changed (const char *path, void *priv, const char *value)
 }
 
 bool
-pcp_mapping_changed (const char *path, void *priv, const char *value)
+pcp_mapping_changed (const char *path, const char *value)
 {
     char *tmp = NULL;
     int mapping_id = -1;
@@ -819,8 +819,8 @@ pcp_register_cb (pcp_callbacks *cb)
     saved_cbs = cb;
     pthread_mutex_unlock (&callback_lock);
 
-    apteryx_watch (CONFIG_PATH "/*", cb ? pcp_config_changed : NULL, NULL);
-    apteryx_watch (MAPPING_PATH "/", cb ? pcp_mapping_changed : NULL, NULL);
+    apteryx_watch (CONFIG_PATH "/*", cb ? pcp_config_changed : NULL);
+    apteryx_watch (MAPPING_PATH "/", cb ? pcp_mapping_changed : NULL);
 
     return true;
 }
