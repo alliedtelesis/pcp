@@ -16,12 +16,8 @@ AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 
 PKG_CHECK_MODULES([NOVAPROVA],[novaprova],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([GLIB],[glib-2.0],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([GLIBMM],[glibmm-2.4],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([GOBJECT],[gobject-2.0],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([LIBXMLXX],[libxml++-2.6],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([LIBXML],[libxml-2.0],[],[unittest_prereq=no])
-PKG_CHECK_MODULES([SIGCXX],[sigc++-2.0],[],[unittest_prereq=no])
+PKG_CHECK_MODULES([GLIB],[glib-2.0])
+PKG_CHECK_MODULES([APTERYX],[apteryx])
 
 AC_ARG_ENABLE([unittest],
   [AS_HELP_STRING([--enable-unittest],
