@@ -707,15 +707,26 @@ test_new_pcp_map_response (void)
     free (map_resp);
 }
 
+time_t pcp_time (time_t *t);
+time_t error_response_time;
+
+time_t
+my_time_for_error_response (time_t *t)
+{
+    error_response_time = time (t);
+    return error_response_time;
+}
+
 void
 test_new_pcp_error_response (void)
 {
+    np_mock (pcp_time, my_time_for_error_response);
+
     pcp_response_header *resp = new_pcp_error_response (MAP_OPCODE,
                                                         EXCESSIVE_REMOTE_PEERS,
                                                         3000);
 
-    // Test may fail if one second passes so check epoch time first to reduce chance of failing
-    NP_ASSERT_EQUAL (resp->epoch_time, (u_int32_t) time (NULL));
+    NP_ASSERT_EQUAL (resp->epoch_time, (u_int32_t) error_response_time);
 
     NP_ASSERT_EQUAL (resp->version, PCP_VERSION);
     NP_ASSERT_EQUAL (resp->r_opcode, R_RESPONSE (MAP_OPCODE));

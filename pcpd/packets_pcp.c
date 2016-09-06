@@ -130,6 +130,16 @@ new_pcp_peer_request (u_int32_t requested_lifetime, const char *ip6str)
 }
 
 /**
+ * A wrapper for time, this allows the unit tests to mock time and ensure
+ * that the correct time is being returned from functions.
+ */
+time_t __attribute__ ((noinline))
+pcp_time (time_t *t)
+{
+    return time (t);
+}
+
+/**
  * @brief new_pcp_error_response - Create a new error PCP response
  * @param r_opcode - The r_opcode value in the original packet
  * @param result - The error result
@@ -145,7 +155,7 @@ new_pcp_error_response (u_int8_t r_opcode, result_code result, u_int32_t lifetim
     error_resp->reserved = 0;
     error_resp->result_code = result;
     error_resp->lifetime = lifetime;
-    error_resp->epoch_time = time (NULL);
+    error_resp->epoch_time = pcp_time (NULL);
     error_resp->reserved_array[0] = 0;
     error_resp->reserved_array[1] = 0;
     error_resp->reserved_array[2] = 0;
